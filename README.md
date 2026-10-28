@@ -4,7 +4,7 @@
 Claude, GPT, Gemini and Grok side by side, plus any OpenAI-compatible model, and video generators or autonomous
 agents (Manus, Jules…) through an HTTP endpoint.
 
-Live: https://focus-harness.vercel.app — the landing at `/`, the app at `/app`. Both are one page: **Let's Focus**
+Live: https://focus-agents.vercel.app — the landing at `/`, the app at `/app`. Both are one page: **Let's Focus**
 collapses the hero and opens the app without a reload.
 
 ## The app
