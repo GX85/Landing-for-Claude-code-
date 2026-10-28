@@ -628,6 +628,12 @@ export function initSections(el: HTMLElement): void {
   if (reducedMotion) words.forEach((w) => w.classList.add("lit"));
   root.querySelector("[data-theme-slot]")?.replaceWith(themeButton("nav-theme"));
   makeFog();
+  const clawd = root.querySelector<HTMLElement>(".clawd");
+  clawd?.addEventListener("click", () => {
+    clawd.classList.remove("wave");
+    void clawd.offsetWidth;
+    clawd.classList.add("wave");
+  });
   setupParallax();
   setupReveal();
   setupCounters();
