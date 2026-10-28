@@ -162,19 +162,58 @@ function setupLive(): void {
 
 function setupGlassLight(): void {
   if (reducedMotion || !matchMedia("(hover: hover)").matches) return;
-  const paper = root.querySelector<HTMLElement>(".paper");
-  root.addEventListener("pointerleave", () => paper?.style.setProperty("--lit", "0"));
+  const lit = root.querySelector<HTMLElement>(".cells-lit");
+  let px = 0;
+  let py = 0;
+  let queued = 0;
+  // one style write per frame, and only to the small spotlight layer
+  const moveLight = () => {
+    queued = 0;
+    if (!lit) return;
+    const x = px - 240;
+    const y = py - 240;
+    const size = innerWidth < 720 ? 44 : 56;
+    // offset the tiles so the lit window lines up with the floor (centred grid)
+    const ox = (innerWidth + 4) / 2 - size / 2 - 2;
+    lit.style.cssText = `--sx:${x}px;--sy:${y}px;--bx:${ox - x}px;--by:${-2 - y}px`;
+  };
+  root.addEventListener("pointerleave", () => lit && (lit.style.cssText = ""));
   root.addEventListener("pointermove", (e) => {
-    // light up the floor cells around the pointer
-    paper?.style.setProperty("--cx", `${e.clientX}px`);
-    paper?.style.setProperty("--cy", `${e.clientY}px`);
-    paper?.style.setProperty("--lit", "1");
+    px = e.clientX;
+    py = e.clientY;
+    if (!queued) queued = requestAnimationFrame(moveLight);
     const el = (e.target as Element).closest<HTMLElement>(".glass, .glass-nav");
     if (!el) return;
     const r = el.getBoundingClientRect();
     el.style.setProperty("--mx", `${(((e.clientX - r.left) / r.width) * 100).toFixed(1)}%`);
     el.style.setProperty("--my", `${(((e.clientY - r.top) / r.height) * 100).toFixed(1)}%`);
   });
+}
+
+/* ---------- fog texture ---------- */
+
+/** Paints soft clouds once into a small canvas; the fog layers just scale and slide it. */
+function makeFog(): void {
+  const c = document.createElement("canvas");
+  c.width = 480;
+  c.height = 320;
+  const g = c.getContext("2d")!;
+  let seed = 11;
+  const rand = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+  for (let i = 0; i < 26; i++) {
+    const x = rand() * 480;
+    const y = 60 + rand() * 220;
+    const r = 30 + rand() * 90;
+    const grad = g.createRadialGradient(x, y, 0, x, y, r);
+    const a = 0.1 + rand() * 0.2;
+    grad.addColorStop(0, `rgba(255,255,255,${a})`);
+    grad.addColorStop(1, "rgba(255,255,255,0)");
+    g.fillStyle = grad;
+    g.beginPath();
+    g.ellipse(x, y, r * 1.8, r, 0, 0, Math.PI * 2);
+    g.fill();
+  }
+  root.querySelector<HTMLElement>(".fog")?.style.setProperty("--fog-img", `url(${c.toDataURL("image/png")})`);
 }
 
 /* ---------- click parallax ---------- */
@@ -588,6 +627,7 @@ export function initSections(el: HTMLElement): void {
   words = setupStatement();
   if (reducedMotion) words.forEach((w) => w.classList.add("lit"));
   root.querySelector("[data-theme-slot]")?.replaceWith(themeButton("nav-theme"));
+  makeFog();
   setupParallax();
   setupReveal();
   setupCounters();

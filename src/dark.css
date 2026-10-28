@@ -430,3 +430,74 @@ html.theme-switching *::after {
     animation: none;
   }
 }
+
+
+/* ======================================================================
+   Performance: keep every animated layer on the compositor.
+   ====================================================================== */
+
+/* fog: a small pre-rendered texture (see sections.ts), scaled up and only translated */
+html.dark .fog i,
+html.light .fog i {
+  inset: -15% -25%;
+  background-image: var(--fog-img, none);
+  -webkit-mask-image: none;
+  mask-image: none;
+  filter: none;
+}
+html.dark .fog i:nth-child(2),
+html.light .fog i:nth-child(2) {
+  inset: -25% -35%;
+}
+html.dark .fog i:nth-child(3),
+html.light .fog i:nth-child(3) {
+  display: none;
+}
+
+/* the spotlight is a small tile window moved with transform, not a full-screen mask */
+html.dark .cells-lit,
+html.light .cells-lit {
+  inset: auto;
+  left: 0;
+  top: 0;
+  width: 480px;
+  height: 480px;
+  -webkit-mask-image: radial-gradient(closest-side, #000, transparent);
+  mask-image: radial-gradient(closest-side, #000, transparent);
+  opacity: 1;
+  transform: translate3d(var(--sx, -9999px), var(--sy, 0px), 0);
+  background-position: var(--bx, 0px) var(--by, 0px);
+  will-change: transform;
+}
+
+/* no full-screen blending */
+html.dark .landing .ambient {
+  mix-blend-mode: normal;
+}
+html.dark .landing .orb {
+  opacity: 0.09;
+}
+
+/* blur only where it shows: the floating nav. Cards are solid enough to read without it. */
+.landing .glass:not(.nav),
+.landing .mode-tabs button[aria-selected="true"],
+.landing .cta {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+html.dark .landing .glass:not(.nav) {
+  background:
+    radial-gradient(120% 85% at var(--mx, 25%) var(--my, 0%), rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0) 60%),
+    linear-gradient(160deg, rgba(28, 28, 34, 0.94), rgba(16, 16, 20, 0.92));
+}
+html.light .landing .glass:not(.nav) {
+  background:
+    radial-gradient(120% 85% at var(--mx, 25%) var(--my, 0%), rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0) 60%),
+    linear-gradient(160deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.78));
+}
+
+/* sections far off screen skip layout and paint */
+.landing-main > section:not(.screen) {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 900px;
+}
