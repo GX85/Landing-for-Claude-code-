@@ -21,7 +21,7 @@ const icons = document.querySelectorAll<HTMLElement>(".icon");
 const speaker = $<HTMLButtonElement>(".icon-speaker");
 const foot = $<HTMLElement>(".foot");
 const rule = $<HTMLElement>(".rule");
-const cta = $<HTMLButtonElement>(".cta");
+const cta = $<HTMLAnchorElement>(".cta");
 
 const phoneQuery = matchMedia("(max-width: 720px)");
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -171,14 +171,12 @@ async function collapse(): Promise<void> {
   await settle(list);
 }
 
-/** "Let's Focus": the same timeline in reverse down to the hairline, then open again. */
-async function replay(): Promise<void> {
-  if (busy || reducedMotion) return;
+/** "Let's Focus": the reveal plays in reverse down to the hairline, then the harness opens. */
+async function enterApp(href: string): Promise<void> {
+  if (busy) return;
   busy = true;
-  const gen = generation;
-  await collapse();
-  if (gen === generation) await reveal();
-  if (gen === generation) busy = false;
+  if (!reducedMotion) await collapse();
+  location.href = href;
 }
 
 /* ---------- interaction ---------- */
@@ -188,7 +186,19 @@ speaker.addEventListener("click", () => {
   speaker.setAttribute("aria-pressed", String(speaker.getAttribute("aria-pressed") !== "true"));
 });
 
-cta.addEventListener("click", () => void replay());
+cta.addEventListener("click", (e) => {
+  if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+  e.preventDefault();
+  void enterApp(cta.href);
+});
+
+// coming back from the harness restores the collapsed page from cache: show it open again
+addEventListener("pageshow", (e) => {
+  if (!e.persisted) return;
+  generation++;
+  clear();
+  busy = false;
+});
 
 let lastSize = `${innerWidth}x${innerHeight}`;
 addEventListener("resize", () => {

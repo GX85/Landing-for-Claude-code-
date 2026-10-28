@@ -291,6 +291,9 @@ body {
 
 .cta {
   flex: none;
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
   height: max(40px, calc(var(--fs) * 0.25));
   padding: 0 1.55em;
   border: 0;

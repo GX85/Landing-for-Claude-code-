@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#f2f2f1" />
+    <meta name="description" content="Focus harness — run Claude, GPT, Gemini, Grok and your own agents as one team." />
+    <title>Focus — Harness</title>
+    <link rel="preload" href="/fonts/inter-latin-wght.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="/src/app/app.css" />
+  </head>
+  <body>
+    <header class="bar">
+      <a class="brand" href="./">Focus</a>
+      <span class="bar-sub">Harness</span>
+      <a class="bar-link" href="./">About</a>
+    </header>
+
+    <div class="layout">
+      <aside class="team" aria-labelledby="team-title">
+        <div class="team-head">
+          <h2 id="team-title">Team</h2>
+          <div class="add">
+            <button class="btn-ghost" id="add-btn" type="button" aria-haspopup="menu" aria-expanded="false">
+              + Add agent
+            </button>
+            <div class="add-menu" id="add-menu" role="menu" hidden></div>
+          </div>
+        </div>
+        <p class="note">
+          Keys stay in this browser. Each call goes through the Focus proxy straight to the provider; nothing
+          is stored on the server.
+        </p>
+        <div class="agents" id="agents"></div>
+      </aside>
+
+      <main class="work">
+        <section class="panel" aria-labelledby="task-title">
+          <div class="modes" role="radiogroup" aria-label="How the team works" id="modes">
+            <button type="button" role="radio" data-mode="council">Council</button>
+            <button type="button" role="radio" data-mode="relay">Relay</button>
+            <button type="button" role="radio" data-mode="review">Review</button>
+          </div>
+          <p class="mode-desc" id="mode-desc"></p>
+          <div class="mode-opts" id="mode-opts"></div>
+
+          <h2 id="task-title" class="sr-only">Task</h2>
+          <textarea
+            id="task"
+            rows="5"
+            placeholder="Describe the task for your team…"
+            aria-label="Task"
+          ></textarea>
+          <div class="run-row">
+            <span class="ready" id="ready"></span>
+            <button class="btn-ghost" id="stop" type="button" hidden>Stop</button>
+            <button class="btn" id="run" type="button">Run team</button>
+          </div>
+        </section>
+
+        <section class="results" id="results" aria-live="polite"></section>
+      </main>
+    </div>
+
+    <script type="module" src="/src/app/main.ts"></script>
+  </body>
+</html>
