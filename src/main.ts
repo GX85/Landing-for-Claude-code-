@@ -37,6 +37,8 @@ async function apply(route: Route): Promise<void> {
 }
 
 addEventListener("popstate", () => void apply(parseRoute(location.pathname)));
+// the landing manages its own scroll position
+history.scrollRestoration = "manual";
 
 void apply(parseRoute(location.pathname));
 

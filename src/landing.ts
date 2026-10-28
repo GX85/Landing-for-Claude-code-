@@ -1,3 +1,5 @@
+import { activateSections, deactivateSections, initSections } from "./sections";
+
 const DURATION = 2100;
 const REC_COLLAPSE_AT = 4900;
 const VIDEO_FALLBACK_DURATION = 4.25;
@@ -177,7 +179,8 @@ let onEnter: (path: string) => void = () => undefined;
 async function enterApp(path: string): Promise<void> {
   if (busy) return;
   busy = true;
-  if (!reducedMotion) await collapse();
+  // the collapse only makes sense while the hero is on screen
+  if (!reducedMotion && scrollY < innerHeight * 0.3) await collapse();
   busy = false;
   onEnter(path);
 }
@@ -267,6 +270,9 @@ export async function showLanding(enter: (path: string) => void): Promise<void> 
   onEnter = enter;
   root.hidden = false;
   root.classList.add("pre");
+  scrollTo(0, 0);
+  initSections(root);
+  activateSections();
   if (!started) {
     started = true;
     await start();
@@ -289,5 +295,6 @@ export function hideLanding(): void {
   generation++;
   clear();
   video.pause();
+  deactivateSections();
   root.hidden = true;
 }

@@ -41,14 +41,14 @@
   box-sizing: border-box;
 }
 
-html,
-body {
+html {
   height: 100%;
-  margin: 0;
 }
 
 body {
-  overflow: hidden;
+  min-height: 100%;
+  margin: 0;
+  overflow-x: clip;
   background: var(--page);
   color: var(--ink);
 }
@@ -60,8 +60,8 @@ body {
 /* Hidden until fonts are ready and the timeline is armed. */
 .landing.pre .paper,
 .landing.pre .nav,
-.landing.pre .hero,
-.landing.pre .foot {
+.landing.pre .landing-main,
+.landing.pre .site-foot {
   visibility: hidden;
 }
 
@@ -111,13 +111,41 @@ body {
   top: 0;
   left: 0;
   right: 0;
-  z-index: 3;
+  z-index: 10;
   display: flex;
+  align-items: center;
   justify-content: space-between;
   padding: calc(var(--fs) * 0.14) var(--side) 0;
   font-size: max(12px, calc(var(--fs) * 0.072));
   font-weight: 450;
   letter-spacing: -0.005em;
+  transition: padding 0.4s var(--ease-ui), background-color 0.4s var(--ease-ui), box-shadow 0.4s var(--ease-ui);
+}
+
+/* once the page scrolls, the nav becomes a frosted bar */
+.nav.scrolled {
+  padding-top: 12px;
+  padding-bottom: 12px;
+  background: rgba(242, 242, 241, 0.78);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.06);
+}
+
+.nav-app {
+  transition: color 0.2s var(--ease-ui), background-color 0.3s var(--ease-ui), padding 0.3s var(--ease-ui);
+}
+
+.nav.scrolled .nav-app {
+  margin: -6px 0;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--btn);
+  color: #ffffff !important;
+}
+
+.nav.scrolled .nav-app:hover {
+  background: var(--btn-hover);
 }
 
 .nav-group {
@@ -137,12 +165,29 @@ body {
 
 /* ---------- hero ---------- */
 
+.landing-main {
+  position: relative;
+  z-index: 1;
+}
+
+/* the first screen; --hp (0 → 1) is how far it has scrolled away */
+.screen {
+  position: relative;
+  height: 100vh;
+  height: 100svh;
+  min-height: 480px;
+  overflow: clip;
+}
+
 .hero {
-  position: fixed;
+  position: absolute;
   left: 50%;
   top: 43%;
   z-index: 2;
   transform: translate(-50%, -50%);
+  translate: 0 calc(var(--hp, 0) * -8vh);
+  scale: calc(1 - var(--hp, 0) * 0.08);
+  opacity: calc(1 - var(--hp, 0) * 1.15);
   font-size: var(--fs);
 }
 
@@ -249,11 +294,12 @@ body {
 /* ---------- footer ---------- */
 
 .foot {
-  position: fixed;
+  position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
   z-index: 3;
+  opacity: calc(1 - var(--hp, 0) * 1.8);
   display: flex;
   align-items: flex-end;
   gap: calc(var(--fs) * 0.16);
@@ -348,8 +394,13 @@ body {
     gap: 1.5em;
   }
 
-  .nav-social {
+  .nav-github {
     display: none;
+  }
+
+  .nav.scrolled {
+    padding-top: 10px;
+    padding-bottom: 10px;
   }
 
   .hero {

@@ -1039,10 +1039,8 @@
 /* popovers */
 
 .popover {
-  position: absolute;
-  left: 8px;
-  bottom: calc(100% + 8px);
-  z-index: 20;
+  position: fixed;
+  z-index: 50;
   width: min(340px, calc(100vw - 32px));
   max-height: min(70vh, 520px);
   overflow-y: auto;
@@ -1051,11 +1049,6 @@
   background: var(--card);
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.16), 0 0 0 1px var(--line);
   animation: pop 0.18s var(--ease);
-}
-
-.hello .popover {
-  bottom: auto;
-  top: calc(100% + 8px);
 }
 
 @keyframes pop {
@@ -1725,4 +1718,248 @@ details[open] > .card-head > svg:last-child {
   align-self: center;
   color: var(--ink-3);
   font-size: 12.5px;
+}
+
+/* ======================================================================
+   Liquid Glass — the navigation layer (sidebar, top bar, message box,
+   menus) floats as translucent glass over the conversation; the
+   conversation itself stays solid and easy to read.
+   ====================================================================== */
+
+.app-root {
+  --glass-bg:
+    radial-gradient(120% 85% at var(--mx, 25%) var(--my, 0%), rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0) 60%),
+    linear-gradient(160deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.5));
+  --glass-blur: blur(24px) saturate(190%);
+  --glass-rim: inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 0 0 1px rgba(255, 255, 255, 0.55);
+  --glass-shadow: 0 1px 2px rgba(20, 16, 40, 0.06), 0 18px 40px -24px rgba(40, 24, 72, 0.32);
+  --scroll-edge: #f6f5f3;
+  background: var(--scroll-edge);
+}
+
+/* soft colour from the hero's sunset, so the glass has something to catch */
+.app-root::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(55vmax 55vmax at -5% -10%, rgba(255, 178, 122, 0.34), transparent 62%),
+    radial-gradient(50vmax 50vmax at 105% 15%, rgba(255, 143, 196, 0.24), transparent 62%),
+    radial-gradient(60vmax 60vmax at 35% 115%, rgba(140, 207, 255, 0.3), transparent 62%),
+    radial-gradient(40vmax 40vmax at 100% 100%, rgba(168, 236, 198, 0.28), transparent 62%);
+}
+
+.shell {
+  position: relative;
+  z-index: 1;
+}
+
+/* sidebar: an inset glass pane */
+.side {
+  margin: 8px 0 8px 8px;
+  height: calc(100% - 16px);
+  border-right: 0;
+  border-radius: 24px;
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-rim), var(--glass-shadow);
+}
+
+.side-nav,
+.side-foot {
+  border-color: rgba(0, 0, 0, 0.06);
+}
+
+.side-search {
+  background: rgba(255, 255, 255, 0.55);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7);
+}
+
+.side-link.active,
+.chat-item.active {
+  background: rgba(255, 255, 255, 0.75);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 4px 12px -8px rgba(40, 24, 72, 0.35);
+}
+
+/* content runs edge to edge; the bars float over it */
+.main {
+  position: relative;
+}
+
+.main-head {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 6;
+  height: 64px;
+  background: linear-gradient(to bottom, rgba(246, 245, 243, 0.96) 45%, rgba(246, 245, 243, 0));
+}
+
+/* a scroll edge: content blurs as it slides under the bar */
+.main-head::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  -webkit-mask: linear-gradient(#000 45%, transparent);
+  mask: linear-gradient(#000 45%, transparent);
+  pointer-events: none;
+}
+
+.head-actions .icon-btn,
+.head-left .icon-btn {
+  background: rgba(255, 255, 255, 0.5);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-rim);
+  border-radius: 999px;
+}
+
+.chat-scroll {
+  padding: 60px 0 168px;
+}
+
+.page {
+  padding-top: 60px;
+}
+
+.hello {
+  padding-top: 64px;
+}
+
+/* the message box: a floating glass capsule */
+.composer-dock {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 6;
+  margin-inline: auto;
+  padding-top: 28px;
+  pointer-events: none;
+}
+
+.composer-dock::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(to top, rgba(246, 245, 243, 0.9) 30%, rgba(246, 245, 243, 0));
+  pointer-events: none;
+}
+
+.composer-dock > * {
+  pointer-events: auto;
+}
+
+.composer {
+  border-radius: 28px;
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-rim), var(--glass-shadow);
+}
+
+.composer:focus-within {
+  box-shadow: var(--glass-rim), 0 0 0 1px rgba(0, 0, 0, 0.12), 0 22px 46px -24px rgba(40, 24, 72, 0.42);
+}
+
+.chip-btn {
+  background: rgba(255, 255, 255, 0.45);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+
+.chip-btn:hover {
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.send-btn {
+  background: rgba(24, 24, 27, 0.9);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 8px 18px -10px rgba(0, 0, 0, 0.6);
+}
+
+/* menus */
+.popover {
+  background:
+    radial-gradient(120% 85% at var(--mx, 25%) var(--my, 0%), rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0) 60%),
+    linear-gradient(160deg, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.62));
+  -webkit-backdrop-filter: blur(34px) saturate(190%);
+  backdrop-filter: blur(34px) saturate(190%);
+  box-shadow: var(--glass-rim), 0 24px 60px -20px rgba(40, 24, 72, 0.4);
+}
+
+/* panels that hold content stay mostly opaque so text reads well */
+.process,
+.compare-card,
+.card,
+.suggestion {
+  background: rgba(255, 255, 255, 0.78);
+  -webkit-backdrop-filter: blur(18px) saturate(170%);
+  backdrop-filter: blur(18px) saturate(170%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 0 0 1px rgba(0, 0, 0, 0.05), 0 12px 30px -24px rgba(40, 24, 72, 0.3);
+}
+
+.suggestion:hover {
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.bubble {
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 0 0 1px rgba(0, 0, 0, 0.05), 0 8px 20px -16px rgba(40, 24, 72, 0.35);
+}
+
+.step {
+  background: rgba(246, 245, 243, 0.85);
+}
+
+@media (max-width: 860px) {
+  .side {
+    margin: 0;
+    top: 8px;
+    bottom: 8px;
+    left: 8px;
+    height: auto;
+    border-radius: 22px;
+    transform: translateX(calc(-100% - 16px));
+  }
+
+  .shell.drawer-open .side {
+    transform: none;
+  }
+
+  .chat-scroll {
+    padding-bottom: 176px;
+  }
+}
+
+/* when the system asks for less transparency, glass turns solid */
+@media (prefers-reduced-transparency: reduce) {
+  .app-root::before {
+    display: none;
+  }
+
+  .side,
+  .composer,
+  .popover,
+  .process,
+  .compare-card,
+  .card,
+  .suggestion,
+  .head-actions .icon-btn,
+  .head-left .icon-btn,
+  .main-head::before {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+
+  .side,
+  .composer,
+  .popover {
+    background: #ffffff;
+  }
 }

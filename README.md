@@ -77,8 +77,18 @@ Set `FOCUS_ALLOW_PRIVATE_URLS=1` to let custom/HTTP agents call `localhost` duri
 
 ## Landing
 
-- `index.html`, `src/style.css`, `src/landing.ts` — the one-screen hero with the hairline-to-pill reveal (2.1 s,
-  Web Animations). **Let's Focus** plays it in reverse and opens the app. `src/main.ts` routes between the two.
+- `index.html`, `src/style.css`, `src/landing.ts` — the hero: the hairline-to-pill reveal (2.1 s, Web
+  Animations). **Let's Focus** plays it in reverse and opens the app. `src/main.ts` routes between the two.
+- `src/sections.ts`, `src/sections.css` — everything below the hero: the moving band of brands that trusted
+  Team Swift (Rapid Bikes in stretched Anton, XTRVISION in the Hurricane signature script, Aeronus in Pixelify
+  Sans, Clorus in Instrument Serif), an intro whose words light up as you scroll, counters, a bento grid of
+  features with live artwork, an animated diagram for each of the eight modes, how it works, the models Focus
+  works with, FAQ and a final call to action.
+- **Liquid Glass** — Apple's translucent material on the navigation layer: the nav turns into a floating glass
+  capsule on scroll, cards, tabs and panels are frosted glass with a specular rim and a highlight that follows
+  the pointer, over soft colour from the hero's sunset. In the app, the sidebar, top bar, message box and menus
+  float as glass over the conversation. Honours *Reduce transparency* and *Reduce motion*.
 - `?rec=1` — recording mode: reveal at 0 s, collapse at 4.9 s, 7 s loop; `window.__recVideo(t)` returns
   `(t mod duration) + 1/120`.
-- Inter (variable, latin, 400–800) is self-hosted from `public/fonts` (SIL OFL, see `LICENSE-Inter.txt`).
+- Inter (variable, latin, 400–800) is self-hosted from `public/fonts` (SIL OFL, see `LICENSE-Inter.txt`); the
+  brand fonts come from `@fontsource` packages (SIL OFL).

@@ -63,6 +63,17 @@ function mount(el: HTMLElement): void {
   root.replaceChildren(h("div", { class: `shell${state.sidebarCollapsed ? " collapsed" : ""}` }, side, scrim, main));
   ctx = { state, persist, go: () => undefined, refreshSidebar: renderSidebar, route: { name: "chat" } };
 
+  // glass catches the light where the pointer is
+  if (matchMedia("(hover: hover)").matches) {
+    root.addEventListener("pointermove", (e) => {
+      const el = (e.target as Element).closest<HTMLElement>(".side, .composer, .popover");
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      el.style.setProperty("--mx", `${(((e.clientX - r.left) / r.width) * 100).toFixed(1)}%`);
+      el.style.setProperty("--my", `${(((e.clientY - r.top) / r.height) * 100).toFixed(1)}%`);
+    });
+  }
+
   main.addEventListener("click", (e) => {
     const action = (e.target as Element).closest<HTMLElement>("[data-action]")?.dataset.action;
     if (action === "toggle-sidebar") toggleSidebar();

@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#f2f2f1" />
     <meta
       name="description"
-      content="Focus — run Claude, GPT, Gemini and Grok together as one team, and plug in video generators and autonomous agents."
+      content="Focus by Team Swift — run Claude, GPT, Gemini, Grok and free models together as one team, with video generators and autonomous agents."
     />
     <title>Focus</title>
     <link
@@ -25,72 +25,364 @@
   </head>
   <body>
     <div id="landing" class="landing pre" hidden>
-    <div class="paper" aria-hidden="true">
-      <svg class="lines" viewBox="0 0 1000 1000" preserveAspectRatio="none"></svg>
-    </div>
+      <div class="paper" aria-hidden="true">
+        <svg class="lines" viewBox="0 0 1000 1000" preserveAspectRatio="none"></svg>
+      </div>
+      <div class="ambient" aria-hidden="true"><i class="orb o1"></i><i class="orb o2"></i><i class="orb o3"></i><i class="orb o4"></i></div>
 
-    <header class="nav">
-      <nav class="nav-group" aria-label="Primary">
-        <a href="/" data-route>Home</a>
-        <a href="/app" data-route>Chat</a>
-        <a href="/app/agents" data-route>Agents</a>
-        <a href="/app/modes" data-route>Modes</a>
-      </nav>
-      <nav class="nav-group nav-social" aria-label="Social">
-        <a href="https://github.com/GX85/Landing-for-Claude-code-#readme">Docs</a>
-        <a href="https://github.com/GX85/Landing-for-Claude-code-">GitHub</a>
-      </nav>
-    </header>
+      <header class="nav glass-nav">
+        <nav class="nav-group" aria-label="Sections">
+          <a href="#features" data-scroll>Features</a>
+          <a href="#modes" data-scroll>Modes</a>
+          <a href="#models" data-scroll>Models</a>
+          <a href="#faq" data-scroll>FAQ</a>
+        </nav>
+        <nav class="nav-group nav-social" aria-label="More">
+          <a class="nav-github" href="https://github.com/GX85/Landing-for-Claude-code-">GitHub</a>
+          <a class="nav-app" href="/app" data-route>Open app</a>
+        </nav>
+      </header>
 
-    <main class="hero">
-      <h1 class="sr-only">Focus</h1>
-      <div class="word">
-        <span class="half half-a" aria-hidden="true">FO</span>
-        <div class="pill">
-          <video
-            class="scene"
-            src="https://d2ol7oe51mr4n9.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/175fbbcd-e50a-480c-bab2-ca16d4678322.mp4"
-            poster="https://d2ol7oe51mr4n9.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/726b168c-da47-4682-a255-cc3e02f89bae.jpg"
-            muted
-            loop
-            playsinline
-            autoplay
-            preload="auto"
-            disablepictureinpicture
-            aria-hidden="true"
-          ></video>
-          <span class="hair" aria-hidden="true"></span>
-          <span class="icon icon-breeze" aria-hidden="true">
-            <svg viewBox="0 0 24 24">
-              <path d="M3 8h10.5a2.75 2.75 0 1 0-2.75-2.75" />
-              <path d="M3 12.5h15a3 3 0 1 1-3 3" />
-              <path d="M3 17h6.5" />
-            </svg>
-          </span>
-          <button class="icon icon-speaker" type="button" aria-pressed="true" aria-label="Toggle sound">
-            <svg viewBox="0 0 24 24">
-              <path d="M4 9.5h3.2L11.5 6v12l-4.3-3.5H4z" />
-              <path class="wave" d="M15 9.2a4 4 0 0 1 0 5.6" />
-              <path class="wave" d="M17.7 6.6a7.6 7.6 0 0 1 0 10.8" />
-            </svg>
-          </button>
+      <main class="landing-main">
+        <section class="screen" aria-label="Focus">
+          <div class="hero">
+            <h1 class="sr-only">Focus — every model, one team</h1>
+            <div class="word">
+              <span class="half half-a" aria-hidden="true">FO</span>
+              <div class="pill">
+                <video
+                  class="scene"
+                  src="https://d2ol7oe51mr4n9.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/175fbbcd-e50a-480c-bab2-ca16d4678322.mp4"
+                  poster="https://d2ol7oe51mr4n9.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/726b168c-da47-4682-a255-cc3e02f89bae.jpg"
+                  muted
+                  loop
+                  playsinline
+                  autoplay
+                  preload="auto"
+                  disablepictureinpicture
+                  aria-hidden="true"
+                ></video>
+                <span class="hair" aria-hidden="true"></span>
+                <span class="icon icon-breeze" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M3 8h10.5a2.75 2.75 0 1 0-2.75-2.75" />
+                    <path d="M3 12.5h15a3 3 0 1 1-3 3" />
+                    <path d="M3 17h6.5" />
+                  </svg>
+                </span>
+                <button class="icon icon-speaker" type="button" aria-pressed="true" aria-label="Toggle sound">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M4 9.5h3.2L11.5 6v12l-4.3-3.5H4z" />
+                    <path class="wave" d="M15 9.2a4 4 0 0 1 0 5.6" />
+                    <path class="wave" d="M17.7 6.6a7.6 7.6 0 0 1 0 10.8" />
+                  </svg>
+                </button>
+              </div>
+              <span class="half half-b" aria-hidden="true">CUS</span>
+            </div>
+          </div>
+
+          <footer class="foot">
+            <p class="lede">
+              Every model in one place. Plug in Claude, GPT, Gemini or Grok and let them work as a
+              team — then add video generators and autonomous agents like Manus or Jules, all focused
+              on one task.
+            </p>
+            <div class="foot-end">
+              <span class="rule" aria-hidden="true"></span>
+              <a class="cta" href="/app">Let's Focus</a>
+            </div>
+          </footer>
+        </section>
+
+        <section class="trusted" aria-labelledby="trusted-title">
+          <p class="eyebrow trusted-title" id="trusted-title">Brands that trusted <strong>Team Swift</strong></p>
+          <div class="marquee glass" data-marquee>
+            <ul class="marquee-track">
+              <li class="partner partner-rapid"><span>Rapid Bikes</span></li>
+              <li class="partner partner-xtr"><span>XTRVISION</span></li>
+              <li class="partner partner-aeronus"><span>Aeronus</span></li>
+              <li class="partner partner-clorus"><span>Clorus</span></li>
+            </ul>
+          </div>
+        </section>
+
+        <section class="intro" id="about" aria-labelledby="intro-title">
+          <div class="wrap">
+            <p class="eyebrow" data-reveal>What is Focus</p>
+            <h2 class="statement" id="intro-title" data-words>
+              One chat. Every model. A whole team of AI working on your task.
+            </h2>
+            <p class="intro-lede" data-reveal>
+              Focus lets Claude, GPT, Gemini, Grok and free open models answer, argue, review and build
+              together — then hands the result to video generators and autonomous agents. You see every
+              step as it happens.
+            </p>
+            <dl class="stats">
+              <div class="stat" data-reveal><dt>team modes</dt><dd data-count="8">8</dd></div>
+              <div class="stat" data-reveal><dt>connections</dt><dd data-count="15">15</dd></div>
+              <div class="stat" data-reveal><dt>models via OpenRouter alone</dt><dd data-count="400" data-suffix="+">400+</dd></div>
+              <div class="stat" data-reveal><dt>to start — no key, no sign-up</dt><dd>$0</dd></div>
+            </dl>
+          </div>
+        </section>
+
+        <section class="features" id="features" aria-labelledby="features-title">
+          <div class="wrap">
+            <div class="section-head">
+              <p class="eyebrow" data-reveal>Features</p>
+              <h2 id="features-title" data-reveal>Everything a team of models needs.</h2>
+              <p data-reveal>From a free first message to hour-long agent runs — in one calm chat.</p>
+            </div>
+
+            <div class="bento">
+              <article class="tile glass tile-team" data-reveal>
+                <div class="tile-art art-orbit" aria-hidden="true">
+                  <span class="orbit orbit-1"><i style="--c: #d97757">C</i></span>
+                  <span class="orbit orbit-2"><i style="--c: #10a37f">G</i></span>
+                  <span class="orbit orbit-3"><i style="--c: #4285f4">G</i></span>
+                  <span class="orbit orbit-4"><i style="--c: #3a3a3c">X</i></span>
+                  <span class="orbit-core">Focus</span>
+                </div>
+                <h3>A team, not a chatbot</h3>
+                <p>
+                  Eight ways to work together: compare answers side by side, merge them, vote, debate,
+                  pass work down a relay, review drafts or split a plan across agents.
+                </p>
+              </article>
+
+              <article class="tile glass tile-free" data-reveal>
+                <div class="tile-art art-free" aria-hidden="true">
+                  <span class="free-amount">$0</span>
+                  <span class="free-tags"><b>No key</b><b>No sign-up</b><b>No card</b></span>
+                </div>
+                <h3>Free from the first message</h3>
+                <p>
+                  A built-in model and image generator work right away. Add OpenRouter's free models or
+                  run Ollama on your own computer.
+                </p>
+              </article>
+
+              <article class="tile glass tile-video" data-reveal>
+                <div class="tile-art art-video" aria-hidden="true">
+                  <span class="mini-pill"><video class="mini-video" src="https://d2ol7oe51mr4n9.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/175fbbcd-e50a-480c-bab2-ca16d4678322.mp4" poster="https://d2ol7oe51mr4n9.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/726b168c-da47-4682-a255-cc3e02f89bae.jpg" muted loop playsinline preload="none"></video></span>
+                  <span class="render"><span class="render-label">Rendering 8s clip</span><span class="render-bar"><i></i></span></span>
+                </div>
+                <h3>Video and images</h3>
+                <p>Veo, Imagen, Luma, Replicate and Pollinations turn the team's words into clips and pictures, right in the chat.</p>
+              </article>
+
+              <article class="tile glass tile-agents" data-reveal>
+                <div class="tile-art art-agents" aria-hidden="true">
+                  <span class="task-row" style="--n: 0"><i class="task-dot" style="--c: #2b2b2b"></i><b>Manus</b> researched 14 sources<em class="task-state"></em></span>
+                  <span class="task-row" style="--n: 1"><i class="task-dot" style="--c: #7c3aed"></i><b>Jules</b> opened pull request #42<em class="task-state"></em></span>
+                  <span class="task-row" style="--n: 2"><i class="task-dot" style="--c: #0ea5e9"></i><b>Devin</b> tests passing<em class="task-state"></em></span>
+                </div>
+                <h3>Autonomous agents</h3>
+                <p>
+                  Hand a task to Manus, Jules or Devin. Focus starts it, follows it for as long as it
+                  takes and brings the result back to your chat.
+                </p>
+              </article>
+
+              <article class="tile glass tile-attach" data-reveal>
+                <div class="tile-art art-files" aria-hidden="true">
+                  <span class="file f1"><i class="file-thumb"></i>photo.jpg</span>
+                  <span class="file f2"><i class="file-ico">PDF</i>report.pdf</span>
+                  <span class="file f3"><i class="file-ico">TS</i>main.ts</span>
+                </div>
+                <h3>Attach anything</h3>
+                <p>Images go straight to vision models; PDFs and code are read in your browser. Drag, drop or paste.</p>
+              </article>
+
+              <article class="tile glass tile-keys" data-reveal>
+                <div class="tile-art art-lock" aria-hidden="true">
+                  <svg viewBox="0 0 48 48" class="lock"><rect x="10" y="21" width="28" height="20" rx="6" /><path d="M16 21v-5a8 8 0 0 1 16 0v5" /><circle cx="24" cy="31" r="2.6" /></svg>
+                  <span class="lock-note">Stored in your browser</span>
+                </div>
+                <h3>Your keys stay yours</h3>
+                <p>Keys live only in your browser. Each request goes straight through to the provider — nothing is kept on our side.</p>
+              </article>
+
+              <article class="tile glass tile-stream" data-reveal>
+                <div class="tile-art art-stream" aria-hidden="true">
+                  <span class="stream-line" style="--w: 92%; --n: 0"></span>
+                  <span class="stream-line" style="--w: 78%; --n: 1"></span>
+                  <span class="stream-line" style="--w: 86%; --n: 2"></span>
+                  <span class="stream-line" style="--w: 54%; --n: 3"></span>
+                </div>
+                <h3>Answers as they're written</h3>
+                <p>Streaming Markdown with code blocks, live progress for every agent, and one-click export of any chat.</p>
+              </article>
+            </div>
+          </div>
+        </section>
+
+        <section class="modes-sec" id="modes" aria-labelledby="modes-title">
+          <div class="wrap">
+            <div class="section-head">
+              <p class="eyebrow" data-reveal>Modes</p>
+              <h2 id="modes-title" data-reveal>Eight ways to work together.</h2>
+              <p data-reveal>Pick one in the message box. Here is how the team passes the work.</p>
+            </div>
+            <div class="modes-ui" data-reveal>
+              <div class="mode-tabs" role="tablist" aria-label="Modes">
+                <button role="tab" type="button" data-mode="solo"><b>Solo</b><span>One-on-one with any agent</span><i class="tab-progress"></i></button>
+                <button role="tab" type="button" data-mode="compare"><b>Compare</b><span>Answers side by side</span><i class="tab-progress"></i></button>
+                <button role="tab" type="button" data-mode="council"><b>Council</b><span>Answers merged into one</span><i class="tab-progress"></i></button>
+                <button role="tab" type="button" data-mode="vote"><b>Vote</b><span>A judge picks the best</span><i class="tab-progress"></i></button>
+                <button role="tab" type="button" data-mode="debate"><b>Debate</b><span>Agents argue, a judge decides</span><i class="tab-progress"></i></button>
+                <button role="tab" type="button" data-mode="relay"><b>Relay</b><span>Each one builds on the last</span><i class="tab-progress"></i></button>
+                <button role="tab" type="button" data-mode="review"><b>Review</b><span>Draft, review, revise</span><i class="tab-progress"></i></button>
+                <button role="tab" type="button" data-mode="planner"><b>Planner</b><span>Split the task, work in parallel</span><i class="tab-progress"></i></button>
+              </div>
+              <div class="mode-stage glass" role="tabpanel">
+                <svg class="mode-svg" viewBox="0 0 560 400" role="img" aria-label="How the selected mode passes work between agents"></svg>
+                <p class="mode-caption" aria-live="polite"></p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="how" id="how" aria-labelledby="how-title">
+          <div class="wrap">
+            <div class="section-head">
+              <p class="eyebrow" data-reveal>How it works</p>
+              <h2 id="how-title" data-reveal>From question to result in three steps.</h2>
+            </div>
+            <ol class="how-steps">
+              <li data-reveal>
+                <span class="how-num">1</span>
+                <h3>Open Focus</h3>
+                <p>The free model is already there — just start typing. No account, no card.</p>
+              </li>
+              <li data-reveal>
+                <span class="how-num">2</span>
+                <h3>Build your team</h3>
+                <p>Add keys for Claude, GPT, Gemini or Grok, free OpenRouter models, Ollama, video generators or agents. Give each agent a role.</p>
+              </li>
+              <li data-reveal>
+                <span class="how-num">3</span>
+                <h3>Pick a mode and send</h3>
+                <p>Watch every agent work live, then copy the result, export the chat or keep the conversation going.</p>
+              </li>
+            </ol>
+          </div>
+        </section>
+
+        <section class="models-sec" id="models" aria-labelledby="models-title">
+          <div class="wrap">
+            <div class="section-head">
+              <p class="eyebrow" data-reveal>Works with</p>
+              <h2 id="models-title" data-reveal>Bring the models you like.</h2>
+              <p data-reveal>Or start with the free ones.</p>
+            </div>
+            <div class="model-groups">
+              <div class="model-group glass" data-reveal>
+                <h3>Free</h3>
+                <ul><li>Focus model</li><li>Focus Image</li><li>OpenRouter free models</li><li>Ollama on your computer</li></ul>
+              </div>
+              <div class="model-group glass" data-reveal>
+                <h3>Chat</h3>
+                <ul><li>Claude</li><li>GPT</li><li>Gemini</li><li>Grok</li><li>DeepSeek, Llama, Qwen, Mistral</li><li>Any OpenAI-compatible API</li></ul>
+              </div>
+              <div class="model-group glass" data-reveal>
+                <h3>Video &amp; images</h3>
+                <ul><li>Veo</li><li>Imagen</li><li>Luma Dream Machine</li><li>Replicate</li><li>Pollinations</li><li>OpenAI images</li></ul>
+              </div>
+              <div class="model-group glass" data-reveal>
+                <h3>Autonomous agents</h3>
+                <ul><li>Manus</li><li>Google Jules</li><li>Devin</li><li>Your own HTTP agent</li></ul>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="faq" id="faq" aria-labelledby="faq-title">
+          <div class="wrap faq-wrap">
+            <div class="section-head">
+              <p class="eyebrow" data-reveal>FAQ</p>
+              <h2 id="faq-title" data-reveal>Questions, answered.</h2>
+            </div>
+            <div class="faq-list glass">
+              <details class="qa" data-reveal>
+                <summary>Is Focus free?</summary>
+                <div class="qa-body"><p>Yes. The built-in model and Focus Image work without a key or an account. For Claude, GPT, Gemini, Grok, video generators and agents you add your own keys and pay those providers directly — Focus adds nothing on top.</p></div>
+              </details>
+              <details class="qa" data-reveal>
+                <summary>Where are my API keys stored?</summary>
+                <div class="qa-body"><p>Only in your browser. When an agent runs, its key travels with that one request through the Focus proxy to the provider and isn't saved anywhere on the server.</p></div>
+              </details>
+              <details class="qa" data-reveal>
+                <summary>Which models can I use?</summary>
+                <div class="qa-body"><p>Claude, GPT, Gemini and Grok with your own keys; hundreds more through OpenRouter (free ones included) or any OpenAI-compatible API; and local models on your computer with Ollama.</p></div>
+              </details>
+              <details class="qa" data-reveal>
+                <summary>Can Focus make videos and images?</summary>
+                <div class="qa-body"><p>Yes. Connect Gemini (Veo, Imagen), Luma, Replicate, Pollinations or OpenAI images and add a generator to your team. In Relay mode a chat model writes the scene and the generator renders it.</p></div>
+              </details>
+              <details class="qa" data-reveal>
+                <summary>What are autonomous agents?</summary>
+                <div class="qa-body"><p>Agents like Manus, Jules and Devin work on their own for minutes or hours — browsing, writing code, opening pull requests. Focus starts the task, follows it and shows the result in your chat.</p></div>
+              </details>
+              <details class="qa" data-reveal>
+                <summary>Do I need to install anything?</summary>
+                <div class="qa-body"><p>No — Focus runs in your browser. Ollama is optional, for running models on your own computer.</p></div>
+              </details>
+              <details class="qa" data-reveal>
+                <summary>Who makes Focus?</summary>
+                <div class="qa-body"><p>Focus is built by Team Swift.</p></div>
+              </details>
+            </div>
+          </div>
+        </section>
+
+        <section class="final" aria-labelledby="final-title">
+          <div class="wrap final-wrap glass final-card">
+            <span class="final-pill" data-reveal aria-hidden="true"><video class="mini-video" src="https://d2ol7oe51mr4n9.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/175fbbcd-e50a-480c-bab2-ca16d4678322.mp4" poster="https://d2ol7oe51mr4n9.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/726b168c-da47-4682-a255-cc3e02f89bae.jpg" muted loop playsinline preload="none"></video></span>
+            <h2 id="final-title" data-reveal>Ready to focus?</h2>
+            <p data-reveal>Your first team is one message away.</p>
+            <div class="final-actions" data-reveal>
+              <a class="cta cta-lg" href="/app" data-route>Let's Focus</a>
+              <a class="text-link glass" href="https://github.com/GX85/Landing-for-Claude-code-">View on GitHub →</a>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer class="site-foot">
+        <div class="wrap site-foot-inner">
+          <div class="site-foot-brand">
+            <span class="site-foot-logo">Focus</span>
+            <p>Every model, one team.<br />Made by Team Swift.</p>
+          </div>
+          <nav class="site-foot-links" aria-label="Footer">
+            <div>
+              <h4>Product</h4>
+              <a href="/app" data-route>Chat</a>
+              <a href="/app/agents" data-route>Agents</a>
+              <a href="/app/connections" data-route>Connections</a>
+              <a href="/app/modes" data-route>Modes</a>
+            </div>
+            <div>
+              <h4>Learn</h4>
+              <a href="#features" data-scroll>Features</a>
+              <a href="#how" data-scroll>How it works</a>
+              <a href="#models" data-scroll>Models</a>
+              <a href="#faq" data-scroll>FAQ</a>
+            </div>
+            <div>
+              <h4>Team Swift</h4>
+              <a href="https://github.com/GX85/Landing-for-Claude-code-">GitHub</a>
+              <a href="https://github.com/GX85/Landing-for-Claude-code-#readme">Docs</a>
+            </div>
+          </nav>
         </div>
-        <span class="half half-b" aria-hidden="true">CUS</span>
-      </div>
-    </main>
-
-    <footer class="foot">
-      <p class="lede">
-        Every model in one place. Plug in Claude, GPT, Gemini or Grok and let them work as a
-        team — then add video generators and autonomous agents like Manus or Jules, all focused on
-        one task.
-      </p>
-      <div class="foot-end">
-        <span class="rule" aria-hidden="true"></span>
-        <a class="cta" href="/app">Let's Focus</a>
-      </div>
-    </footer>
-
+        <div class="wrap site-foot-bottom">
+          <span>© 2026 Team Swift</span>
+          <span>Keys stay in your browser.</span>
+        </div>
+      </footer>
     </div>
 
     <div id="app" class="app-root" hidden></div>

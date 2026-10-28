@@ -569,8 +569,16 @@ function openPopover(anchor: HTMLElement, content: HTMLElement): void {
   closePopover();
   if (same) return;
   popover = h("div", { class: "popover", role: "dialog", "data-for": anchor.dataset.popover ?? "" }, content);
-  anchor.closest(".composer")!.append(popover);
+  // lives at the app root, not inside the glass message box: glass can only blur
+  // what's behind it when no glass ancestor is in the way
+  const r = anchor.getBoundingClientRect();
+  const left = Math.max(12, Math.min(r.left, innerWidth - 352));
+  if (r.top > innerHeight / 2) Object.assign(popover.style, { left: `${left}px`, bottom: `${innerHeight - r.top + 8}px` });
+  else Object.assign(popover.style, { left: `${left}px`, top: `${r.bottom + 8}px` });
+  anchor.closest(".app-root")!.append(popover);
 }
+
+addEventListener("resize", closePopover);
 
 function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig): HTMLElement {
   const input = h("textarea", { rows: 1, placeholder: "Message your team…", "aria-label": "Message" });
