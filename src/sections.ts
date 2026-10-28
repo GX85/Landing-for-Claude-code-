@@ -190,6 +190,84 @@ function setupGlassLight(): void {
   });
 }
 
+/* ---------- live demo: a Debate played back ---------- */
+
+const DEMO_SCRIPT = [
+  "Use APIs. Three people can't out-train labs that spend billions — and every week on GPUs and infra is a week not talking to customers. Rent the best model today, switch tomorrow.",
+  "Build the parts that are yours. If AI is the product, your data and fine-tunes are the moat; pure API apps are one price change away from losing their margin.",
+  "APIs win for now. Ship on hosted models, keep prompts and evals in your repo, and log your data from day one — that keeps the door open to fine-tune later without slowing down today.",
+];
+
+function setupDemo(): void {
+  const win = root.querySelector<HTMLElement>("[data-demo]");
+  if (!win) return;
+  const agents = [...win.querySelectorAll<HTMLElement>(".demo-agent")];
+  let timers: number[] = [];
+  let running = false;
+
+  const stop = () => {
+    timers.forEach(clearTimeout);
+    timers = [];
+    running = false;
+  };
+  const later = (fn: () => void, ms: number) => timers.push(window.setTimeout(fn, ms));
+  const status = (a: HTMLElement, text: string, writing = false) => {
+    a.querySelector(".demo-status")!.textContent = text;
+    a.classList.toggle("writing", writing);
+  };
+
+  // types one answer word by word, then calls done
+  const type = (a: HTMLElement, text: string, done: () => void) => {
+    const out = a.querySelector<HTMLElement>(".demo-text")!;
+    const words = text.split(" ");
+    let i = 0;
+    status(a, "writing", true);
+    const step = () => {
+      i += 1 + Math.floor(Math.random() * 2);
+      out.textContent = words.slice(0, i).join(" ");
+      if (i < words.length) later(step, 50 + Math.random() * 70);
+      else {
+        status(a, "done");
+        done();
+      }
+    };
+    step();
+  };
+
+  const play = () => {
+    stop();
+    running = true;
+    agents.forEach((a) => {
+      a.querySelector(".demo-text")!.textContent = "";
+      status(a, "waiting");
+    });
+    if (reducedMotion) {
+      agents.forEach((a, i) => {
+        a.querySelector(".demo-text")!.textContent = DEMO_SCRIPT[i];
+        status(a, "done");
+      });
+      return;
+    }
+    let left = 2;
+    const judge = () => {
+      if (--left) return;
+      status(agents[2], "thinking…");
+      later(() => type(agents[2], DEMO_SCRIPT[2], () => later(play, 7000)), 900);
+    };
+    agents.slice(0, 2).forEach((a, i) => {
+      status(a, "thinking…");
+      later(() => type(a, DEMO_SCRIPT[i], judge), 600 + i * 450);
+    });
+  };
+
+  win.querySelector("[data-demo-replay]")?.addEventListener("click", play);
+  new IntersectionObserver((entries) => {
+    const visible = entries[0].isIntersecting && active;
+    if (visible && !running) play();
+    else if (!visible && running) stop();
+  }, { threshold: 0.35 }).observe(win);
+}
+
 /* ---------- fog texture ---------- */
 
 /** Paints soft clouds once into a small canvas; the fog layers just scale and slide it. */
@@ -628,6 +706,8 @@ export function initSections(el: HTMLElement): void {
   if (reducedMotion) words.forEach((w) => w.classList.add("lit"));
   root.querySelector("[data-theme-slot]")?.replaceWith(themeButton("nav-theme"));
   makeFog();
+  setupDemo();
+  root.querySelectorAll<HTMLElement>(".skill-chips b").forEach((b, i) => b.style.setProperty("--i", String(i)));
   const clawd = root.querySelector<HTMLElement>(".clawd");
   clawd?.addEventListener("click", () => {
     clawd.classList.remove("wave");

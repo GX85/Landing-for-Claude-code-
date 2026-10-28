@@ -38,6 +38,7 @@
 
       <header class="nav glass-nav">
         <nav class="nav-group" aria-label="Sections">
+          <a href="#demo" data-scroll>Demo</a>
           <a href="#features" data-scroll>Features</a>
           <a href="#modes" data-scroll>Modes</a>
           <a href="#models" data-scroll>Models</a>
@@ -127,10 +128,49 @@
             </p>
             <dl class="stats">
               <div class="stat" data-reveal><dt>team modes</dt><dd data-count="8">8</dd></div>
-              <div class="stat" data-reveal><dt>connections</dt><dd data-count="15">15</dd></div>
-              <div class="stat" data-reveal><dt>models via OpenRouter alone</dt><dd data-count="400" data-suffix="+">400+</dd></div>
+              <div class="stat" data-reveal><dt>connections</dt><dd data-count="29">29</dd></div>
+              <div class="stat" data-reveal><dt>models via OpenRouter alone</dt><dd data-count="460" data-suffix="+">460+</dd></div>
               <div class="stat" data-reveal><dt>to start — no key, no sign-up</dt><dd>$0</dd></div>
             </dl>
+          </div>
+        </section>
+
+        <section class="demo" id="demo" aria-labelledby="demo-title">
+          <div class="wrap">
+            <div class="section-head">
+              <p class="eyebrow" data-reveal>See it work</p>
+              <h2 id="demo-title" data-reveal>Two models argue. You get the answer.</h2>
+              <p data-reveal>This is how Debate mode looks: Claude and GPT take sides, Gemini judges.</p>
+            </div>
+            <div class="demo-window glass" data-reveal data-demo>
+              <div class="demo-bar">
+                <span class="demo-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+                <span class="demo-url">focus-agents.vercel.app/app</span>
+                <span class="demo-chip">Debate · 3 agents</span>
+              </div>
+              <div class="demo-body" aria-live="off">
+                <p class="demo-user">Should a three-person startup build its own AI stack, or just use APIs?</p>
+                <div class="demo-pair">
+                  <article class="demo-agent" style="--c: #d97757" data-agent="0">
+                    <header><i>C</i><b>Claude</b><span class="demo-side">For APIs</span><em class="demo-status">waiting</em></header>
+                    <p class="demo-text"></p>
+                  </article>
+                  <article class="demo-agent" style="--c: #10a37f" data-agent="1">
+                    <header><i>G</i><b>GPT</b><span class="demo-side">For building</span><em class="demo-status">waiting</em></header>
+                    <p class="demo-text"></p>
+                  </article>
+                </div>
+                <article class="demo-agent demo-judge" style="--c: #4285f4" data-agent="2">
+                  <header><i>G</i><b>Gemini</b><span class="demo-side">Judge</span><em class="demo-status">waiting</em></header>
+                  <p class="demo-text"></p>
+                </article>
+              </div>
+              <div class="demo-composer">
+                <span class="demo-input">Message your team…</span>
+                <button class="demo-replay" type="button" data-demo-replay>Replay</button>
+                <a class="demo-try" href="/app" data-route>Try it free</a>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -165,8 +205,8 @@
                 </div>
                 <h3>Free from the first message</h3>
                 <p>
-                  A built-in model and image generator work right away. Add OpenRouter's free models or
-                  run Ollama on your own computer.
+                  Pick NVIDIA Nemotron, MiniMax, Mistral, GPT-OSS or Codestral and start typing. A free
+                  image generator is built in, and OpenRouter's free models are one click away.
                 </p>
               </article>
 
@@ -176,7 +216,7 @@
                   <span class="render"><span class="render-label">Rendering 8s clip</span><span class="render-bar"><i></i></span></span>
                 </div>
                 <h3>Video and images</h3>
-                <p>Veo, Imagen, Luma, Replicate and Pollinations turn the team's words into clips and pictures, right in the chat.</p>
+                <p>Twenty generators — Veo, Imagen, Runway, Hailuo, fal, FLUX, Stability, Ideogram and more — turn the team's words into clips and pictures, right in the chat.</p>
               </article>
 
               <article class="tile glass tile-agents" data-reveal>
@@ -220,6 +260,24 @@
                 </div>
                 <h3>Answers as they're written</h3>
                 <p>Streaming Markdown with code blocks, live progress for every agent, and one-click export of any chat.</p>
+              </article>
+
+              <article class="tile glass tile-skills" data-reveal>
+                <div class="tile-art art-skills" aria-hidden="true">
+                  <span class="skill-agent"><i style="--c: #bf5af2">R</i><b>Researcher</b><small>your agent · Nemotron 3 Ultra</small></span>
+                  <span class="skill-chips"><b class="on">Research brief</b><b class="on">Fact-check</b><b>Code review</b><b class="on">Match my language</b><b>SEO</b><b>Summaries</b></span>
+                </div>
+                <h3>Your agents, your skills</h3>
+                <p>Build an agent from scratch: name, avatar, role, model and effort. Give it skills — ten built in, or write your own — and it follows them every time.</p>
+              </article>
+
+              <article class="tile glass tile-theme" data-reveal>
+                <div class="tile-art art-theme" aria-hidden="true">
+                  <span class="theme-half theme-light"><i></i><i></i><i></i></span>
+                  <span class="theme-half theme-dark"><i></i><i></i><i></i></span>
+                </div>
+                <h3>Light or dark</h3>
+                <p>One tap switches the whole thing, landing and studio. Focus remembers your choice.</p>
               </article>
             </div>
           </div>
@@ -287,15 +345,15 @@
             <div class="model-groups">
               <div class="model-group glass" data-reveal>
                 <h3>Free</h3>
-                <ul><li>Focus model</li><li>Focus Image</li><li>OpenRouter free models</li><li>Ollama on your computer</li></ul>
+                <ul><li>NVIDIA Nemotron 3</li><li>MiniMax, Mistral, GPT-OSS, Codestral</li><li>Focus Image</li><li>OpenRouter free models</li><li>Ollama on your computer</li></ul>
               </div>
               <div class="model-group glass" data-reveal>
                 <h3>Chat</h3>
-                <ul><li>Claude</li><li>GPT</li><li>Gemini</li><li>Grok</li><li>DeepSeek, Llama, Qwen, Mistral</li><li>Any OpenAI-compatible API</li></ul>
+                <ul><li>Claude</li><li>GPT</li><li>Gemini</li><li>Grok</li><li>460+ models on OpenRouter</li><li>Any OpenAI-compatible API</li></ul>
               </div>
               <div class="model-group glass" data-reveal>
                 <h3>Video &amp; images</h3>
-                <ul><li>Veo</li><li>Imagen</li><li>Luma Dream Machine</li><li>Replicate</li><li>Pollinations</li><li>OpenAI images</li></ul>
+                <ul><li>Veo, Imagen</li><li>Runway, Hailuo, Luma</li><li>fal, Replicate</li><li>FLUX, Stability, Ideogram</li><li>Together, Hugging Face, Cloudflare</li><li>SiliconFlow, Nebius, DeepInfra, Segmind, DeepAI</li><li>OpenAI images, Pollinations</li></ul>
               </div>
               <div class="model-group glass" data-reveal>
                 <h3>Autonomous agents</h3>
@@ -314,7 +372,7 @@
             <div class="faq-list glass">
               <details class="qa" data-reveal>
                 <summary>Is Focus free?</summary>
-                <div class="qa-body"><p>Yes. The built-in model and Focus Image work without a key or an account. For Claude, GPT, Gemini, Grok, video generators and agents you add your own keys and pay those providers directly — Focus adds nothing on top.</p></div>
+                <div class="qa-body"><p>Yes. The built-in free models and Focus Image work without a key. For Claude, GPT, Gemini, Grok, video generators and agents you add your own keys and pay those providers directly — Focus adds nothing on top.</p></div>
               </details>
               <details class="qa" data-reveal>
                 <summary>Where are my API keys stored?</summary>
@@ -331,6 +389,14 @@
               <details class="qa" data-reveal>
                 <summary>What are autonomous agents?</summary>
                 <div class="qa-body"><p>Agents like Manus, Jules and Devin work on their own for minutes or hours — browsing, writing code, opening pull requests. Focus starts the task, follows it and shows the result in your chat.</p></div>
+              </details>
+              <details class="qa" data-reveal>
+                <summary>What are skills?</summary>
+                <div class="qa-body"><p>Skills are short sets of instructions an agent always follows, like “Fact-check” or “Match my language”. Focus has ten built in; you can write your own on the Agents page and turn them on for any agent.</p></div>
+              </details>
+              <details class="qa" data-reveal>
+                <summary>Do I need an account?</summary>
+                <div class="qa-body"><p>Not to try it. When sign-in is switched on you can use GitHub, Google or your email — we send a one-time code, no password to remember.</p></div>
               </details>
               <details class="qa" data-reveal>
                 <summary>Do I need to install anything?</summary>

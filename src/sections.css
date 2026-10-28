@@ -1876,3 +1876,293 @@
 @media (prefers-reduced-motion: reduce) {
   .clawd, .clawd.wave { transition: none; animation: none; }
 }
+
+/* ---------- live demo ---------- */
+.demo-window {
+  overflow: hidden;
+  border-radius: 28px;
+}
+.demo-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--ink-3);
+}
+.demo-dots {
+  display: flex;
+  gap: 6px;
+}
+.demo-dots i {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--line);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.demo-url {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.demo-chip {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  color: var(--ink);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.demo-body {
+  display: grid;
+  gap: 14px;
+  padding: clamp(16px, 3vw, 28px);
+}
+.demo-user {
+  justify-self: end;
+  max-width: min(520px, 90%);
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: 20px 20px 6px 20px;
+  background: color-mix(in srgb, var(--ink) 9%, transparent);
+  font-size: 15px;
+  line-height: 1.45;
+}
+.demo-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.demo-agent {
+  min-width: 0;
+  padding: 14px 16px 16px;
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+  box-shadow: inset 0 0 0 1px var(--line);
+  transition: box-shadow 0.4s, background-color 0.4s;
+}
+.demo-agent.writing {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 55%, transparent), 0 0 30px -12px var(--c);
+}
+.demo-agent header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.demo-agent header i {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--c);
+  color: #fff;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+}
+.demo-side {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--c) 18%, transparent);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.demo-status {
+  margin-left: auto;
+  color: var(--ink-3);
+  font-size: 12px;
+  font-style: normal;
+}
+.demo-agent.writing .demo-status::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--c);
+  vertical-align: 1px;
+  animation: blink 1s steps(2) infinite;
+}
+.demo-text {
+  min-height: 4.4em;
+  margin: 10px 0 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+.demo-agent.writing .demo-text::after {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 1.05em;
+  margin-left: 2px;
+  background: var(--c);
+  vertical-align: -2px;
+  animation: blink 1s steps(2) infinite;
+}
+.demo-judge .demo-text {
+  min-height: 3em;
+  color: var(--ink);
+}
+.demo-composer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 clamp(16px, 3vw, 28px) clamp(16px, 3vw, 24px);
+  padding: 8px 8px 8px 18px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.demo-input {
+  flex: 1;
+  min-width: 0;
+  color: var(--ink-3);
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.demo-replay,
+.demo-try {
+  flex: none;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+.demo-replay {
+  background: none;
+  color: var(--ink-2);
+}
+.demo-replay:hover {
+  color: var(--ink);
+}
+.demo-try {
+  background: var(--btn);
+  color: var(--page);
+}
+@media (max-width: 720px) {
+  .demo-pair {
+    grid-template-columns: 1fr;
+  }
+  .demo-url {
+    display: none;
+  }
+  .demo-replay {
+    display: none;
+  }
+}
+
+/* ---------- skills and theme tiles ---------- */
+.tile-skills {
+  grid-column: span 2;
+}
+.art-skills {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 16px;
+  padding: 22px 26px;
+}
+.skill-agent {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.skill-agent i {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--c);
+  color: #fff;
+  font-style: normal;
+  font-weight: 700;
+}
+.skill-agent b {
+  font-size: 16px;
+}
+.skill-agent small {
+  color: var(--ink-3);
+  font-size: 12.5px;
+}
+.skill-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.skill-chips b {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.skill-chips b.on {
+  background: var(--ink);
+  color: var(--page);
+}
+.tile.live .skill-chips b {
+  animation: chip-pop 4.8s var(--ease-out) infinite;
+  animation-delay: calc(var(--i, 0) * 0.4s);
+}
+@keyframes chip-pop {
+  0%, 70%, 100% { transform: none; }
+  78% { transform: translateY(-3px); }
+}
+.art-theme {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 20px;
+}
+.theme-half {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 14px;
+  border-radius: 16px;
+}
+.theme-half i {
+  height: 10px;
+  border-radius: 5px;
+}
+.theme-half i:nth-child(1) { width: 70%; }
+.theme-half i:nth-child(2) { width: 90%; }
+.theme-half i:nth-child(3) { width: 50%; }
+.theme-light {
+  background: #f4f4f2;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+.theme-light i { background: #d4d4d0; }
+.theme-dark {
+  background: #121215;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+.theme-dark i { background: #3a3a40; }
+@media (max-width: 1000px) {
+  .tile-skills { grid-column: span 2; }
+}
+@media (max-width: 720px) {
+  .tile-skills { grid-column: auto; }
+}
+
+@media (max-width: 480px) {
+  .nav a[href="#demo"] { display: none; }
+  .nav-app { white-space: nowrap; }
+}
