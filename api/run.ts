@@ -17,7 +17,7 @@ export default {
       const messages = parseMessages(body);
       const system = typeof body.system === "string" ? body.system.slice(0, 20_000) : undefined;
       if (agent.provider !== "webhook" && !agent.model) throw new UserError("Pick a model for this agent.");
-      if (!agent.apiKey && !["custom", "webhook"].includes(agent.provider)) {
+      if (!agent.apiKey && !["custom", "webhook", "focus"].includes(agent.provider)) {
         throw new UserError("Add an API key for this agent's connection.");
       }
       input = { agent, messages, system };

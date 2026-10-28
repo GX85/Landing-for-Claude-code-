@@ -5,6 +5,11 @@ import { MODES } from "./modes";
 import {
   COLORS,
   connectionOf,
+  KIND_LABEL,
+  modelsFor,
+  setModels,
+  type AgentKind,
+  type ProviderGroup,
   missing,
   newAgent,
   newConnection,
@@ -63,11 +68,13 @@ export function renderAgents(main: HTMLElement, ctx: Ctx): void {
       }
     };
 
-    const models = h("datalist", { id: `models-${agent.id}` }, ...(conn?.models ?? []).map((m) => h("option", { value: m })));
+    const info = conn ? PROVIDERS[conn.provider] : undefined;
+    const isChat = agent.kind === "chat";
+    const models = h("datalist", { id: `models-${agent.id}` }, ...modelsFor(conn, agent.kind).map((m) => h("option", { value: m })));
     const modelInput = h("input", {
       value: agent.model,
       list: models.id,
-      placeholder: conn?.provider === "webhook" ? "optional" : "model id",
+      placeholder: info?.models[agent.kind] || (info?.needsModel || isChat ? "model id" : "optional"),
       spellcheck: "false",
       autocomplete: "off",
       oninput: (e) => update({ model: (e.target as HTMLInputElement).value.trim() }),
@@ -79,10 +86,11 @@ export function renderAgents(main: HTMLElement, ctx: Ctx): void {
       loadBtn.textContent = "Loading…";
       loadBtn.disabled = true;
       try {
-        conn.models = await fetchModels(conn);
+        const list = await fetchModels(conn, agent.kind);
+        setModels(conn, agent.kind, list);
         ctx.persist();
-        models.replaceChildren(...conn.models.map((m) => h("option", { value: m })));
-        loadBtn.textContent = `${conn.models.length} models`;
+        models.replaceChildren(...list.map((m) => h("option", { value: m })));
+        loadBtn.textContent = `${list.length} ${conn.provider === "jules" ? "repos" : "models"}`;
         modelInput.focus();
         try {
           modelInput.showPicker?.();
@@ -124,7 +132,7 @@ export function renderAgents(main: HTMLElement, ctx: Ctx): void {
           h(
             "span",
             { class: "card-sub" },
-            conn ? `${PROVIDERS[conn.provider].label}${agent.model ? ` · ${agent.model}` : ""}` : "No connection",
+            conn ? `${isChat ? "" : `${KIND_LABEL[agent.kind]} · `}${PROVIDERS[conn.provider].label}${agent.model ? ` · ${agent.model}` : ""}` : "No connection",
             problem ? h("span", { class: "warn" }, ` · ${problem}`) : "",
           ),
         ),
@@ -146,8 +154,9 @@ export function renderAgents(main: HTMLElement, ctx: Ctx): void {
                 onchange: (e) => {
                   const id = (e.target as HTMLSelectElement).value;
                   if (id === "__new") return ctx.go({ name: "connections" });
-                  const next = state.connections.find((c) => c.id === id)!;
-                  update({ connectionId: id, model: PROVIDERS[next.provider].defaultModel, effort: next.provider === "anthropic" ? "high" : "" }, true);
+                  const next = PROVIDERS[state.connections.find((c) => c.id === id)!.provider];
+                  const kind = next.kinds.includes(agent.kind) ? agent.kind : next.kinds[0];
+                  update({ connectionId: id, kind, model: next.models[kind] ?? "", effort: id && next === PROVIDERS.anthropic ? "high" : "" }, true);
                 },
               },
               ...state.connections.map((c) => h("option", { value: c.id, selected: c.id === agent.connectionId }, c.name)),
@@ -155,7 +164,29 @@ export function renderAgents(main: HTMLElement, ctx: Ctx): void {
             ),
           ),
         ),
-        field("Model", h("div", { class: "inline" }, modelInput, conn && conn.provider !== "webhook" ? loadBtn : null, models), conn?.provider === "anthropic" ? "Default: claude-opus-5-5. Load models to see everything your key can use." : null),
+        info && info.kinds.length > 1
+          ? field(
+              "Type",
+              h(
+                "select",
+                {
+                  onchange: (e) => {
+                    const kind = (e.target as HTMLSelectElement).value as AgentKind;
+                    update({ kind, model: info.models[kind] ?? "" }, true);
+                  },
+                },
+                ...info.kinds.map((k) => h("option", { value: k, selected: k === agent.kind }, KIND_LABEL[k])),
+              ),
+              agent.kind === "chat" ? null : `${KIND_LABEL[agent.kind]} agents turn the message (or, in Relay, the previous agent's text) into ${agent.kind === "agent" ? "a task" : `a${agent.kind === "image" ? "n image" : " video"}`}.`,
+            )
+          : null,
+        info?.modelLabel === "—"
+          ? null
+          : field(
+              isChat ? "Model" : (info?.modelLabel ?? "Model"),
+              h("div", { class: "inline" }, modelInput, conn && !["webhook", "devin"].includes(conn.provider) && !info?.builtIn ? loadBtn : null, models),
+              conn?.provider === "anthropic" ? "Default: claude-opus-5-5. Load models to see everything your key can use." : conn?.provider === "openrouter" && isChat ? "Load models: the free ones (ending in :free) come first." : null,
+            ),
         conn?.provider === "anthropic"
           ? field(
               "Effort",
@@ -167,7 +198,9 @@ export function renderAgents(main: HTMLElement, ctx: Ctx): void {
               "Higher effort thinks longer and costs more.",
             )
           : null,
-        field(
+        !isChat
+          ? null
+          : field(
           "Role",
           roleInput,
           h(
@@ -253,24 +286,28 @@ export function renderAgents(main: HTMLElement, ctx: Ctx): void {
   const addMenu = h(
     "div",
     { class: "add-row" },
-    ...state.connections.map((c) =>
-      h(
-        "button",
-        {
-          class: "btn-ghost sm",
-          type: "button",
-          onclick: () => {
-            const agent = newAgent(c);
-            if (state.agents.some((a) => a.name === agent.name)) agent.name = `${agent.name} ${state.agents.filter((a) => a.name.startsWith(agent.name)).length + 1}`;
-            state.agents.push(agent);
-            state.config.agentIds.push(agent.id);
-            openAgents.add(agent.id);
-            rerender();
+    ...state.connections.flatMap((c) =>
+      PROVIDERS[c.provider].kinds.map((kind) => {
+        const base = ["custom", "webhook"].includes(c.provider) ? c.name : PROVIDERS[c.provider].agentName;
+        return h(
+          "button",
+          {
+            class: "btn-ghost sm",
+            type: "button",
+            onclick: () => {
+              const agent = newAgent(c, kind);
+              if (["custom", "webhook"].includes(c.provider)) agent.name = c.name;
+              if (state.agents.some((a) => a.name === agent.name)) agent.name = `${agent.name} ${state.agents.filter((a) => a.name.startsWith(agent.name)).length + 1}`;
+              state.agents.push(agent);
+              if (kind === "chat") state.config.agentIds.push(agent.id);
+              openAgents.add(agent.id);
+              rerender();
+            },
           },
-        },
-        icon("plus", 14),
-        `${PROVIDERS[c.provider].agentName === "Custom model" || PROVIDERS[c.provider].agentName === "Agent" ? c.name : PROVIDERS[c.provider].agentName} agent`,
-      ),
+          icon(kind === "chat" ? "plus" : kind === "agent" ? "agents" : kind === "video" ? "video" : "image", 14),
+          kind === "chat" || PROVIDERS[c.provider].kinds.length === 1 ? base : `${base} ${KIND_LABEL[kind].toLowerCase()}`,
+        );
+      }),
     ),
   );
 
@@ -288,21 +325,44 @@ export function renderAgents(main: HTMLElement, ctx: Ctx): void {
 
 const WEBHOOK_DOC = `POST <your URL>
 Authorization: Bearer <token>        (if you set one)
-{ "task": "...", "system": "...", "model": "...", "history": [...] }
+{ "task": "...", "system": "...", "model": "...", "history": [...], "images": ["data:image/png;base64,…"] }
 
 Reply with plain text, or JSON:
 { "output": "text", "video_url": "https://…/clip.mp4" }`;
+
+const GROUPS: { id: ProviderGroup; title: string; note: string }[] = [
+  { id: "free", title: "Free", note: "Focus's own free model needs nothing. OpenRouter has free models with a free account; Ollama runs models on your computer." },
+  { id: "chat", title: "Chat models", note: "Your own keys for the big model providers." },
+  { id: "media", title: "Video & image generators", note: "Gemini (Veo, Imagen) and OpenAI (images) use the keys above. These add more video and image models." },
+  { id: "agents", title: "Autonomous agents", note: "Agents that work on their own for minutes or hours — browsing, coding, opening pull requests. Focus starts the task and follows it until it's done." },
+];
 
 export function renderConnections(main: HTMLElement, ctx: Ctx): void {
   const { state } = ctx;
 
   const card = (conn: Connection): HTMLElement => {
     const info = PROVIDERS[conn.provider];
+    const used = state.agents.filter((a) => a.connectionId === conn.id).map((a) => a.name);
+    const head = (status: Node) =>
+      h(
+        "div",
+        { class: "card-head static" },
+        h("span", { class: "avatar", style: `background:${info.color}` }, conn.name.slice(0, 1)),
+        h("span", { class: "card-title" }, h("span", { class: "card-name" }, conn.name), h("span", { class: "card-sub" }, used.length ? `Used by ${used.join(", ")}` : info.label)),
+        status,
+      );
+
+    if (info.builtIn) {
+      return h("section", { class: "card conn-card" }, head(h("span", { class: "conn-status ok" }, "Free · no key needed")), h("div", { class: "card-body" }, h("p", { class: "field-hint" }, info.hint ?? "")));
+    }
+
     const status = h("span", { class: "conn-status" });
+    const kindForTest: AgentKind = info.kinds[0];
     const setStatus = () => {
       const ok = (!info.needsKey || conn.apiKey) && (!info.needsUrl || conn.baseUrl);
+      const n = modelsFor(conn, kindForTest).length;
       status.className = `conn-status${ok ? " ok" : ""}`;
-      status.textContent = ok ? (conn.models.length ? `Connected · ${conn.models.length} models` : info.needsKey ? "Key added" : "Ready") : info.needsUrl ? "Needs URL" : "Needs key";
+      status.textContent = ok ? (n ? `Connected · ${n} ${conn.provider === "jules" ? "repos" : "models"}` : info.needsKey ? "Key added" : "Ready") : info.needsUrl && !conn.baseUrl ? `Needs ${info.urlLabel?.toLowerCase() ?? "URL"}` : "Needs key";
     };
     setStatus();
     const update = (patch: Partial<Connection>) => {
@@ -318,20 +378,21 @@ export function renderConnections(main: HTMLElement, ctx: Ctx): void {
       placeholder: info.keyPlaceholder,
       autocomplete: "off",
       spellcheck: "false",
-      oninput: (e) => update({ apiKey: (e.target as HTMLInputElement).value.trim(), models: [] }),
+      oninput: (e) => update({ apiKey: (e.target as HTMLInputElement).value.trim(), models: [], mediaModels: {} }),
     });
     const show = h("button", { class: "btn-ghost sm", type: "button" }, "Show");
     show.addEventListener("click", () => {
       keyInput.type = keyInput.type === "password" ? "text" : "password";
       show.textContent = keyInput.type === "password" ? "Show" : "Hide";
     });
+    const canTest = !["webhook", "devin", "manus", "luma"].includes(conn.provider);
     const test = h("button", { class: "btn sm", type: "button" }, "Test");
     test.addEventListener("click", async () => {
       test.disabled = true;
       test.textContent = "Testing…";
       try {
-        update({ models: await fetchModels(conn) });
-        status.textContent = `Connected · ${conn.models.length} models`;
+        setModels(conn, kindForTest, await fetchModels(conn, kindForTest));
+        update({});
       } catch (error) {
         status.className = "conn-status err";
         status.textContent = error instanceof Error ? error.message : String(error);
@@ -340,37 +401,41 @@ export function renderConnections(main: HTMLElement, ctx: Ctx): void {
         test.textContent = "Test";
       }
     });
-    const used = state.agents.filter((a) => a.connectionId === conn.id).map((a) => a.name);
+
+    const removable = !["anthropic", "openai", "gemini", "xai"].includes(conn.provider) || state.connections.filter((c) => c.provider === conn.provider).length > 1;
 
     return h(
       "section",
       { class: "card conn-card" },
-      h(
-        "div",
-        { class: "card-head static" },
-        h("span", { class: "avatar", style: `background:${info.color}` }, conn.name.slice(0, 1)),
-        h("span", { class: "card-title" }, h("span", { class: "card-name" }, conn.name), h("span", { class: "card-sub" }, used.length ? `Used by ${used.join(", ")}` : info.label)),
-        status,
-      ),
+      head(status),
       h(
         "div",
         { class: "card-body" },
         conn.provider === "custom" || conn.provider === "webhook"
           ? field("Name", h("input", { value: conn.name, oninput: (e) => update({ name: (e.target as HTMLInputElement).value }) }))
           : null,
-        info.needsUrl
+        info.needsUrl || info.local
           ? field(
-              conn.provider === "webhook" ? "Endpoint URL" : "Base URL",
-              h("input", { type: "url", value: conn.baseUrl, placeholder: info.urlPlaceholder, spellcheck: "false", oninput: (e) => update({ baseUrl: (e.target as HTMLInputElement).value.trim(), models: [] }) }),
+              info.urlLabel ?? "URL",
+              h("input", {
+                type: conn.provider === "devin" ? "text" : "url",
+                value: conn.baseUrl,
+                placeholder: info.urlPlaceholder,
+                spellcheck: "false",
+                oninput: (e) => update({ baseUrl: (e.target as HTMLInputElement).value.trim(), models: [] }),
+              }),
             )
           : null,
-        field(
-          conn.provider === "webhook" ? "Token" : "API key",
-          h("div", { class: "inline" }, keyInput, show, conn.provider === "webhook" ? null : test),
-          info.keyUrl ? h("span", {}, "Get a key at ", h("a", { href: info.keyUrl, target: "_blank", rel: "noopener" }, new URL(info.keyUrl).host)) : info.hint,
-        ),
+        info.local
+          ? h("div", { class: "inline" }, canTest ? test : null)
+          : field(
+              conn.provider === "webhook" ? "Token" : "API key",
+              h("div", { class: "inline" }, keyInput, show, canTest ? test : null),
+              info.keyUrl ? h("span", {}, "Get a key at ", h("a", { href: info.keyUrl, target: "_blank", rel: "noopener" }, new URL(info.keyUrl).host)) : null,
+            ),
+        info.hint ? h("p", { class: "field-hint" }, info.hint) : null,
         conn.provider === "webhook" ? h("pre", { class: "doc" }, WEBHOOK_DOC) : null,
-        conn.provider === "custom" || conn.provider === "webhook" || state.connections.filter((c) => c.provider === conn.provider).length > 1
+        removable
           ? h(
               "div",
               { class: "card-actions" },
@@ -396,39 +461,56 @@ export function renderConnections(main: HTMLElement, ctx: Ctx): void {
     );
   };
 
+  const addButton = (p: Provider) =>
+    h(
+      "button",
+      {
+        class: "btn-ghost sm",
+        type: "button",
+        onclick: () => {
+          const conn = newConnection(p);
+          state.connections.push(conn);
+          const agent = newAgent(conn);
+          state.agents.push(agent);
+          if (agent.kind === "chat") state.config.agentIds.push(agent.id);
+          ctx.persist();
+          ctx.refreshSidebar();
+          renderConnections(main, ctx);
+          main.querySelector<HTMLElement>(`[data-conn="${conn.id}"] input`)?.focus();
+        },
+      },
+      icon("plus", 14),
+      PROVIDERS[p].label,
+    );
+
+  const sections = GROUPS.map((g) => {
+    const conns = state.connections.filter((c) => PROVIDERS[c.provider].group === g.id);
+    const addable = (Object.keys(PROVIDERS) as Provider[]).filter(
+      (p) => PROVIDERS[p].group === g.id && !PROVIDERS[p].builtIn && (["custom", "webhook"].includes(p) || !conns.some((c) => c.provider === p)),
+    );
+    return h(
+      "section",
+      { class: "conn-group" },
+      h("h2", { class: "section-title" }, g.title),
+      h("p", { class: "page-note" }, g.note),
+      h(
+        "div",
+        { class: "cards" },
+        ...conns.map((c) => {
+          const el = card(c);
+          el.dataset.conn = c.id;
+          return el;
+        }),
+      ),
+      addable.length ? h("div", { class: "add-row" }, ...addable.map(addButton)) : null,
+    );
+  });
+
   page(
     main,
     "Connections",
-    "Your API keys. They stay in this browser: each request goes through the Focus proxy straight to the provider, and nothing is stored on the server.",
-    h("div", { class: "cards" }, ...state.connections.map(card)),
-    h("h2", { class: "section-title" }, "Add a connection"),
-    h(
-      "div",
-      { class: "add-row" },
-      ...(Object.keys(PROVIDERS) as Provider[]).map((p) =>
-        h(
-          "button",
-          {
-            class: "btn-ghost sm",
-            type: "button",
-            onclick: () => {
-              const conn = newConnection(p);
-              state.connections.push(conn);
-              const agent = newAgent(conn);
-              state.agents.push(agent);
-              state.config.agentIds.push(agent.id);
-              ctx.persist();
-              ctx.refreshSidebar();
-              renderConnections(main, ctx);
-              main.querySelector<HTMLElement>(".conn-card:last-of-type input")?.focus();
-            },
-          },
-          icon("plus", 14),
-          PROVIDERS[p].label,
-        ),
-      ),
-    ),
-    h("p", { class: "page-note" }, "Adding a connection also adds an agent that uses it. Video generators and autonomous agents such as Manus or Jules connect through an HTTP agent: a small endpoint of yours that forwards the task to their API."),
+    "Where your agents' models come from. Keys stay in this browser: each request goes through the Focus proxy straight to the provider, and nothing is stored on the server.",
+    ...sections,
   );
 }
 

@@ -1,4 +1,4 @@
-import { callAgent, type ChatTurn } from "./api";
+import { callAgent, runJob, type ChatTurn, type ImagePart } from "./api";
 import type { Agent, Connection, ModeId, StepRecord } from "./store";
 
 export interface ModeInfo {
@@ -105,6 +105,8 @@ export interface RunContext {
   task: string;
   /** Earlier turns of this chat. */
   history: ChatTurn[];
+  /** Images the user attached to this message. */
+  images: ImagePart[];
   agents: Agent[];
   lead: Agent;
   rounds: number;
@@ -123,7 +125,12 @@ class Run {
   steps: StepRecord[] = [];
   private nextId = 1;
 
-  constructor(private ctx: RunContext) {}
+  /** Agents that can reason in text: they lead, judge, review and debate. */
+  private thinkers: Agent[];
+
+  constructor(private ctx: RunContext) {
+    this.thinkers = ctx.agents.filter((a) => a.kind === "chat");
+  }
 
   private system(agent: Agent): string {
     const team = this.ctx.agents.map((a) => a.name).join(", ");
@@ -139,7 +146,7 @@ class Run {
   }
 
   /** One agent call shown as a step. Resolves with the step whether it worked or not. */
-  async call(agent: Agent, phase: string, prompt: string): Promise<StepRecord> {
+  async call(agent: Agent, phase: string, prompt: string, withImages = true): Promise<StepRecord> {
     const step: StepRecord = {
       id: this.nextId++,
       agentId: agent.id,
@@ -152,19 +159,26 @@ class Run {
     };
     this.steps.push(step);
     this.ctx.onChange();
+    const images = withImages ? this.ctx.images : [];
     try {
-      const result = await callAgent(
-        agent,
-        this.ctx.connectionOf(agent),
-        this.system(agent),
-        [...this.ctx.history, { role: "user", content: prompt }],
-        this.ctx.signal,
-        (text) => {
-          step.text = text;
-          this.ctx.onChange();
-        },
-      );
-      Object.assign(step, { status: "done", text: result.text, media: result.media, model: result.model, usage: result.usage });
+      const result =
+        agent.kind === "chat"
+          ? await callAgent(
+              agent,
+              this.ctx.connectionOf(agent),
+              this.system(agent),
+              [...this.ctx.history, { role: "user", content: prompt, ...(images.length ? { images } : {}) }],
+              this.ctx.signal,
+              (text) => {
+                step.text = text;
+                this.ctx.onChange();
+              },
+            )
+          : await runJob(agent, this.ctx.connectionOf(agent), prompt, images, this.ctx.signal, (progress) => {
+              step.progress = progress;
+              this.ctx.onChange();
+            });
+      Object.assign(step, { status: "done", text: result.text, media: result.media, model: result.model, usage: result.usage, progress: undefined });
     } catch (error) {
       step.status = "error";
       step.error = this.ctx.signal.aborted ? "Stopped." : error instanceof Error ? error.message : String(error);
@@ -187,11 +201,17 @@ class Run {
   }
 
   private others(agent: Agent) {
-    return this.ctx.agents.filter((a) => a.id !== agent.id);
+    return this.thinkers.filter((a) => a.id !== agent.id);
+  }
+
+  /** The lead, or the first agent that can reason in text. */
+  private get lead(): Agent {
+    return this.ctx.lead.kind === "chat" ? this.ctx.lead : (this.thinkers[0] ?? this.ctx.lead);
   }
 
   async solo(): Promise<RunOutcome> {
-    const step = await this.call(this.ctx.lead, "Answer", this.task);
+    const lead = this.ctx.lead;
+    const step = await this.call(lead, lead.kind === "chat" ? "Answer" : lead.kind === "agent" ? "Task" : `Make ${lead.kind}`, this.task);
     return { final: step.status === "done" ? step : undefined };
   }
 
@@ -201,11 +221,12 @@ class Run {
   }
 
   async council(): Promise<RunOutcome> {
-    const good = (await this.all("Answer")).filter((s) => s.status === "done" && s.text);
+    const answers = await this.all("Answer");
+    const good = answers.filter((s) => s.status === "done" && s.text && !s.media);
     this.stopIfAborted();
-    if (good.length <= 1) return { final: good[0] };
+    if (good.length <= 1) return { final: good[0] ?? answers.find((s) => s.status === "done") };
     const merged = await this.call(
-      this.ctx.lead,
+      this.lead,
       "Merge",
       [
         `Task:\n${this.task}`,
@@ -218,16 +239,17 @@ class Run {
   }
 
   async vote(): Promise<RunOutcome> {
-    const good = (await this.all("Answer")).filter((s) => s.status === "done" && s.text);
+    const answers = await this.all("Answer");
+    const good = answers.filter((s) => s.status === "done" && (s.text || s.media));
     this.stopIfAborted();
     if (good.length <= 1) return { final: good[0] };
     const verdict = await this.call(
-      this.ctx.lead,
+      this.lead,
       "Judge",
       [
         `Task:\n${this.task}`,
         "Candidate answers:",
-        ...good.map((s, i) => `### Answer ${i + 1}\n${s.text}`),
+        ...good.map((s, i) => `### Answer ${i + 1}\n${s.text || "(a generated image or video — you can't see it; judge the text answers)"}`),
         `Pick the best answer. Reply with "WINNER: <number>" on the first line, then one short paragraph explaining why it beats the others.`,
       ].join("\n\n"),
     );
@@ -238,8 +260,8 @@ class Run {
   }
 
   async debate(): Promise<RunOutcome> {
-    const judge = this.ctx.lead;
-    const debaters = this.others(judge).length >= 2 ? this.others(judge) : this.ctx.agents;
+    const judge = this.lead;
+    const debaters = this.others(judge).length >= 2 ? this.others(judge) : this.thinkers;
     let last = await Promise.all(
       debaters.map((d) =>
         this.call(d, "Opening", `Question for debate:\n${this.task}\n\nState your position clearly and make your strongest case. Be concise.`),
@@ -284,25 +306,26 @@ class Run {
     let last: StepRecord | undefined;
     for (const agent of this.ctx.agents) {
       this.stopIfAborted();
-      const webhook = this.ctx.connectionOf(agent).provider === "webhook";
+      // tools such as video generators and autonomous agents take the previous result as their prompt
+      const webhook = agent.kind !== "chat" || this.ctx.connectionOf(agent).provider === "webhook";
       const prompt = !last
         ? this.task
         : webhook
-          ? // tools such as video generators take the previous result as their prompt
-            last.text
+          ? last.text
           : [
               `Task:\n${this.task}`,
               `The previous agent (${last.agentName}) produced:\n\n${last.text}`,
               "Improve it: fix errors, fill gaps and continue the work. Reply with the complete improved result only.",
             ].join("\n\n");
-      const step = await this.call(agent, webhook ? "Generate" : last ? "Improve" : "Draft", prompt);
+      const phase = agent.kind === "image" || agent.kind === "video" ? `Make ${agent.kind}` : agent.kind === "agent" ? "Task" : webhook ? "Generate" : last ? "Improve" : "Draft";
+      const step = await this.call(agent, phase, prompt, !last);
       if (step.status === "done") last = step;
     }
     return { final: last };
   }
 
   async review(): Promise<RunOutcome> {
-    const author = this.ctx.lead;
+    const author = this.lead;
     const reviewer = this.others(author)[0];
     let draft = await this.call(author, "Draft", this.task);
     if (draft.status !== "done") return {};
@@ -339,14 +362,15 @@ class Run {
   }
 
   async planner(): Promise<RunOutcome> {
-    const lead = this.ctx.lead;
+    const lead = this.lead;
     const team = this.ctx.agents;
+    const can = (a: Agent) => (a.kind === "chat" ? "" : a.kind === "agent" ? " [autonomous agent: give it a self-contained task]" : ` [makes ${a.kind}s: give it a visual prompt]`);
     const plan = await this.call(
       lead,
       "Plan",
       [
         `Task:\n${this.task}`,
-        `Your team: ${team.map((a) => `${a.name}${a.role ? ` (${a.role.slice(0, 80)})` : ""}`).join("; ")}.`,
+        `Your team: ${team.map((a) => `${a.name}${can(a)}${a.role ? ` (${a.role.slice(0, 80)})` : ""}`).join("; ")}.`,
         'Split the task into 2–5 independent subtasks that can be done in parallel and assign each to one teammate by name. Reply with JSON only, in this shape: [{"agent": "Name", "task": "what to do"}]',
       ].join("\n\n"),
     );
@@ -366,7 +390,8 @@ class Run {
     const results = await Promise.all(
       items.map((item, i) => {
         const agent = team.find((a) => a.name.toLowerCase() === item.agent?.toLowerCase()) ?? team[i % team.length];
-        return this.call(agent, `Subtask ${i + 1}`, `Overall task:\n${this.task}\n\nYour part:\n${item.task}\n\nDo only your part, thoroughly.`).then((step) => ({ item, step }));
+        const prompt = agent.kind === "chat" ? `Overall task:\n${this.task}\n\nYour part:\n${item.task}\n\nDo only your part, thoroughly.` : item.task!;
+        return this.call(agent, `Subtask ${i + 1}`, prompt).then((step) => ({ item, step }));
       }),
     );
     this.stopIfAborted();
@@ -378,7 +403,7 @@ class Run {
       [
         `Task:\n${this.task}`,
         "Your team finished these parts:",
-        ...done.map((r, i) => `### Part ${i + 1}: ${r.item.task} (by ${r.step.agentName})\n${r.step.text}`),
+        ...done.map((r, i) => `### Part ${i + 1}: ${r.item.task} (by ${r.step.agentName})\n${r.step.text || "(delivered a generated file, shown to the user separately)"}`),
         "Assemble the parts into one complete, coherent final result. Reply with the final result only.",
       ].join("\n\n"),
     );

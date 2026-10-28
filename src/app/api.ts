@@ -1,8 +1,14 @@
-import type { Agent, Connection } from "./store";
+import { PROVIDERS, type Agent, type AgentKind, type Connection } from "./store";
+
+export interface ImagePart {
+  mediaType: string;
+  data: string;
+}
 
 export interface ChatTurn {
   role: "user" | "assistant";
   content: string;
+  images?: ImagePart[];
 }
 
 export interface CallResult {
@@ -13,10 +19,76 @@ export interface CallResult {
 }
 
 function agentPayload(agent: Agent, conn: Connection) {
-  return { provider: conn.provider, model: agent.model, apiKey: conn.apiKey, baseUrl: conn.baseUrl, effort: agent.effort };
+  return { provider: conn.provider, kind: agent.kind, model: agent.model, apiKey: conn.apiKey, baseUrl: conn.baseUrl, effort: agent.effort };
 }
 
-/** Calls one agent through /api/run and streams its text into `onText`. */
+async function errorFrom(res: Response): Promise<Error> {
+  const data = (await res.json().catch(() => ({}))) as { error?: string };
+  return new Error(data.error || `Request failed (${res.status}).`);
+}
+
+const ollamaBase = (conn: Connection) => (conn.baseUrl.trim() || PROVIDERS.ollama.urlPlaceholder!).replace(/\/+$/, "");
+
+/** Reads an OpenAI-style SSE stream and returns the full text. */
+async function readSse(res: Response, onText: (full: string) => void): Promise<{ text: string; model?: string }> {
+  const reader = res.body!.pipeThrough(new TextDecoderStream()).getReader();
+  let buffer = "";
+  let text = "";
+  let model: string | undefined;
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += value;
+    let nl: number;
+    while ((nl = buffer.indexOf("\n")) >= 0) {
+      const line = buffer.slice(0, nl).trim();
+      buffer = buffer.slice(nl + 1);
+      if (!line.startsWith("data:")) continue;
+      const payload = line.slice(5).trim();
+      if (payload === "[DONE]") return { text, model };
+      const chunk = JSON.parse(payload) as { model?: string; choices?: { delta?: { content?: string } }[] };
+      model = chunk.model ?? model;
+      const delta = chunk.choices?.[0]?.delta?.content;
+      if (delta) {
+        text += delta;
+        onText(text);
+      }
+    }
+  }
+  return { text, model };
+}
+
+/** Ollama runs on the user's computer, so the browser talks to it directly. */
+async function callOllama(agent: Agent, conn: Connection, system: string, messages: ChatTurn[], signal: AbortSignal, onText: (full: string) => void): Promise<CallResult> {
+  let res: Response;
+  try {
+    res = await fetch(`${ollamaBase(conn)}/v1/chat/completions`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: agent.model,
+        stream: true,
+        messages: [
+          { role: "system", content: system },
+          ...messages.map((m) =>
+            m.images?.length
+              ? { role: m.role, content: [{ type: "text", text: m.content }, ...m.images.map((i) => ({ type: "image_url", image_url: { url: `data:${i.mediaType};base64,${i.data}` } }))] }
+              : { role: m.role, content: m.content },
+          ),
+        ],
+      }),
+      signal,
+    });
+  } catch (error) {
+    if (signal.aborted) throw error;
+    throw new Error(`Can't reach Ollama at ${ollamaBase(conn)}. Is it running, and started with OLLAMA_ORIGINS=* ?`);
+  }
+  if (!res.ok) throw new Error(`Ollama answered ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const { text, model } = await readSse(res, onText);
+  return { text: text.trim(), model: model ?? agent.model };
+}
+
+/** Calls one chat agent and streams its text into `onText`. */
 export async function callAgent(
   agent: Agent,
   conn: Connection,
@@ -25,16 +97,15 @@ export async function callAgent(
   signal: AbortSignal,
   onText: (full: string) => void,
 ): Promise<CallResult> {
+  if (conn.provider === "ollama") return callOllama(agent, conn, system, messages, signal, onText);
+
   const res = await fetch("/api/run", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ agent: agentPayload(agent, conn), system, messages }),
     signal,
   });
-  if (!res.ok || !res.body) {
-    const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error || `Request failed (${res.status}).`);
-  }
+  if (!res.ok || !res.body) throw await errorFrom(res);
 
   const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
   let buffer = "";
@@ -62,13 +133,84 @@ export async function callAgent(
   throw new Error(signal.aborted ? "Stopped." : "The connection closed before the answer finished.");
 }
 
-export async function fetchModels(conn: Connection): Promise<string[]> {
+interface JobResponse {
+  status: "running" | "done" | "error";
+  job?: { id: string; extra?: Record<string, string> };
+  text?: string;
+  media?: string;
+  progress?: string;
+  error?: string;
+}
+
+const POLL_MS = 4000;
+const JOB_LIMIT_MS = 45 * 60_000;
+
+const wait = (ms: number, signal: AbortSignal) =>
+  new Promise<void>((resolve, reject) => {
+    const t = setTimeout(resolve, ms);
+    signal.addEventListener("abort", () => (clearTimeout(t), reject(new DOMException("Stopped", "AbortError"))), { once: true });
+  });
+
+/** Runs a media or agent job: starts it, then polls until it finishes. */
+export async function runJob(agent: Agent, conn: Connection, prompt: string, images: ImagePart[], signal: AbortSignal, onProgress: (status: string) => void): Promise<CallResult> {
+  const post = async (body: object): Promise<JobResponse> => {
+    const res = await fetch("/api/job", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ agent: agentPayload(agent, conn), ...body }), signal });
+    if (!res.ok) throw await errorFrom(res);
+    return (await res.json()) as JobResponse;
+  };
+  const started = Date.now();
+  let r = await post({ action: "start", prompt, images });
+  while (r.status === "running") {
+    if (Date.now() - started > JOB_LIMIT_MS) throw new Error("Gave up waiting after 45 minutes; the job may still finish at the provider.");
+    if (r.progress) onProgress(r.progress);
+    await wait(POLL_MS, signal);
+    r = await post({ action: "poll", job: r.job });
+  }
+  if (r.status === "error") throw new Error(r.error || "The job failed.");
+  return { text: r.text ?? "", media: r.media, model: agent.model || undefined };
+}
+
+export async function fetchModels(conn: Connection, kind: AgentKind = "chat"): Promise<string[]> {
+  if (conn.provider === "ollama") {
+    let res: Response;
+    try {
+      res = await fetch(`${ollamaBase(conn)}/api/tags`);
+    } catch {
+      throw new Error(`Can't reach Ollama at ${ollamaBase(conn)}. Is it running, and started with OLLAMA_ORIGINS=* ?`);
+    }
+    const data = (await res.json()) as { models?: { name: string }[] };
+    return (data.models ?? []).map((m) => m.name);
+  }
   const res = await fetch("/api/models", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ agent: { provider: conn.provider, apiKey: conn.apiKey, baseUrl: conn.baseUrl } }),
+    body: JSON.stringify({ agent: { provider: conn.provider, kind, apiKey: conn.apiKey, baseUrl: conn.baseUrl } }),
   });
   const data = (await res.json().catch(() => ({}))) as { models?: string[]; error?: string };
   if (!res.ok || !data.models) throw new Error(data.error || "Couldn't load models.");
   return data.models;
+}
+
+const mediaCache = new Map<string, Promise<string>>();
+
+/** Turns a `proxy:<provider>:<url>` result into a playable blob URL, fetched with the key. */
+export function resolveMedia(media: string, connections: Connection[]): Promise<string> {
+  const m = /^proxy:(\w+):(.+)$/.exec(media);
+  if (!m) return Promise.resolve(media);
+  const cached = mediaCache.get(media);
+  if (cached) return cached;
+  const conn = connections.find((c) => c.provider === m[1] && c.apiKey);
+  const promise = (async () => {
+    if (!conn) throw new Error("The connection for this file is gone.");
+    const res = await fetch("/api/media", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ agent: { provider: conn.provider, apiKey: conn.apiKey }, url: m[2] }),
+    });
+    if (!res.ok) throw await errorFrom(res);
+    return URL.createObjectURL(await res.blob());
+  })();
+  mediaCache.set(media, promise);
+  promise.catch(() => mediaCache.delete(media));
+  return promise;
 }

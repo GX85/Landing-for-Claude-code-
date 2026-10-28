@@ -5,7 +5,7 @@ export default {
   async fetch(request: Request): Promise<Response> {
     try {
       const agent = parseAgent((await readJson(request)).agent);
-      if (!agent.apiKey && agent.provider !== "custom") throw new UserError("Add an API key first.");
+      if (!agent.apiKey && !["custom", "focus", "pollinations", "luma", "replicate", "manus", "webhook"].includes(agent.provider)) throw new UserError("Add an API key first.");
       return json({ models: await listModels(agent) });
     } catch (error) {
       return errorResponse(error);

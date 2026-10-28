@@ -525,6 +525,7 @@
 .msg-files {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   justify-content: flex-end;
   gap: 6px;
 }
@@ -1661,4 +1662,67 @@ details[open] > .card-head > svg:last-child {
     transition: none !important;
     animation-duration: 0s !important;
   }
+}
+
+/* ---------- attachments & media ---------- */
+
+.msg-image {
+  max-width: 220px;
+  max-height: 220px;
+  border-radius: 14px;
+  object-fit: cover;
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+.chip-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  object-fit: cover;
+}
+
+.composer.drop {
+  box-shadow: 0 0 0 2px var(--focus-ring), 0 6px 24px rgba(0, 0, 0, 0.08);
+}
+
+.media-box {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+}
+
+.media-box .media {
+  max-width: min(100%, 640px);
+}
+
+.media-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--ink-3) !important;
+  font-size: 12.5px;
+  text-decoration: none;
+}
+
+.media-link:hover {
+  color: var(--ink) !important;
+}
+
+.conn-group + .conn-group {
+  margin-top: 8px;
+}
+
+.conn-group .page-note {
+  margin: -4px 0 12px;
+}
+
+.conn-group .add-row {
+  margin-top: 10px;
+}
+
+.composer-files.reading::after {
+  content: "Reading file…";
+  align-self: center;
+  color: var(--ink-3);
+  font-size: 12.5px;
 }

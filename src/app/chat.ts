@@ -2,15 +2,17 @@ import type { Ctx } from "./app";
 import type { ChatTurn } from "./api";
 import { h, icon, pageHead, seconds } from "./dom";
 import { renderMarkdown } from "./markdown";
+import { ACCEPT, dataUrlOf, readAttachment } from "./attachments";
+import { resolveMedia, type ImagePart } from "./api";
 import { modeInfo, MODES, startRun } from "./modes";
-import { connectionOf, isReady, missing, PROVIDERS, uid, type Agent, type Attachment, type Chat, type ChatConfig, type Message, type StepRecord } from "./store";
+import { connectionOf, isReady, KIND_LABEL, missing, PROVIDERS, uid, type Agent, type Attachment, type Chat, type ChatConfig, type Message, type StepRecord } from "./store";
 
 const SCENE_VIDEO = "https://d2ol7oe51mr4n9.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/175fbbcd-e50a-480c-bab2-ca16d4678322.mp4";
 const SCENE_POSTER = "https://d2ol7oe51mr4n9.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/726b168c-da47-4682-a255-cc3e02f89bae.jpg";
-const MAX_ATTACHMENT_BYTES = 300_000;
 const HISTORY_CHARS = 200_000;
 
-const SUGGESTIONS: { mode: Chat["config"]["mode"]; text: string }[] = [
+const SUGGESTIONS: { mode: Chat["config"]["mode"]; text: string; kind?: "image" }[] = [
+  { mode: "solo", kind: "image", text: "A floating island with a waterfall above sunset clouds, cinematic, ultra detailed" },
   { mode: "compare", text: "Explain how a transformer model works, in five sentences." },
   { mode: "debate", text: "Should an early-stage startup build its own AI stack or buy one?" },
   { mode: "planner", text: "Plan the launch of a mobile habit-tracking app: positioning, channels and a 4-week timeline." },
@@ -32,6 +34,7 @@ let view: { chatId?: string; list: HTMLElement; scroller: HTMLElement; ctx: Ctx 
 /* ---------- view ---------- */
 
 export function renderChat(main: HTMLElement, ctx: Ctx, chat: Chat | undefined): void {
+  connectionsRef = ctx.state.connections;
   const config = chat?.config ?? (draft = structuredClone(ctx.state.config));
   const list = h("div", { class: "thread" });
   const scroller = h("div", { class: "chat-scroll" }, list);
@@ -83,7 +86,7 @@ export function renderChat(main: HTMLElement, ctx: Ctx, chat: Chat | undefined):
           ? h(
               "div",
               { class: "suggestions" },
-              ...SUGGESTIONS.map((s) =>
+              ...SUGGESTIONS.filter((s) => !s.kind || ctx.state.agents.some((a) => a.kind === s.kind && isReady(ctx.state, a))).slice(0, 4).map((s) =>
                 h(
                   "button",
                   {
@@ -92,6 +95,8 @@ export function renderChat(main: HTMLElement, ctx: Ctx, chat: Chat | undefined):
                     onclick: () => {
                       config.mode = s.mode;
                       ctx.state.config.mode = s.mode;
+                      const maker = s.kind && ctx.state.agents.find((a) => a.kind === s.kind && isReady(ctx.state, a));
+                      if (maker) config.leadId = ctx.state.config.leadId = maker.id;
                       ctx.persist();
                       renderChat(main, ctx, chat);
                       const input = main.querySelector<HTMLTextAreaElement>(".composer textarea");
@@ -102,7 +107,7 @@ export function renderChat(main: HTMLElement, ctx: Ctx, chat: Chat | undefined):
                       }
                     },
                   },
-                  h("span", { class: "suggestion-mode" }, icon(modeInfo(s.mode).icon, 15), modeInfo(s.mode).name),
+                  h("span", { class: "suggestion-mode" }, icon(s.kind ?? modeInfo(s.mode).icon, 15), s.kind ? "Image" : modeInfo(s.mode).name),
                   h("span", {}, s.text),
                 ),
               ),
@@ -139,8 +144,10 @@ function teamOf(ctx: Ctx, config: ChatConfig): Agent[] {
 }
 
 function leadOf(ctx: Ctx, config: ChatConfig, team: Agent[]): Agent | undefined {
-  const pool = config.mode === "solo" ? ctx.state.agents.filter((a) => isReady(ctx.state, a)) : team;
-  return pool.find((a) => a.id === config.leadId) ?? pool.find((a) => connectionOf(ctx.state, a)?.provider !== "webhook") ?? pool[0];
+  // in Solo you can talk to any agent; elsewhere the lead has to reason in text
+  const thinkers = team.filter((a) => a.kind === "chat");
+  const pool = config.mode === "solo" ? ctx.state.agents.filter((a) => isReady(ctx.state, a)) : thinkers.length ? thinkers : team;
+  return pool.find((a) => a.id === config.leadId) ?? pool.find((a) => a.kind === "chat" && connectionOf(ctx.state, a)?.provider !== "webhook") ?? pool[0];
 }
 
 function stepTime(step: StepRecord): string {
@@ -153,11 +160,29 @@ function markdownEl(text: string, cls = "md"): HTMLElement {
   return el;
 }
 
+let connectionsRef: Ctx["state"]["connections"] = [];
+
+const isImage = (url: string) => /^data:image\//.test(url) || /\.(png|jpe?g|gif|webp)(\?|$)/i.test(url) || /image\.pollinations\.ai/.test(url);
+
+/** Shows a generated image or video; files that need the key load through /api/media. */
 function mediaEl(url: string | undefined, alt: string): HTMLElement | null {
-  if (!url || !/^https?:/i.test(url)) return null;
-  return /\.(png|jpe?g|gif|webp)(\?|$)/i.test(url)
-    ? h("img", { class: "media", src: url, alt })
-    : h("video", { class: "media", src: url, controls: true, playsinline: true });
+  if (!url || !/^(https?:|data:(image|video)\/|proxy:)/i.test(url)) return null;
+  const download = (src: string) =>
+    h("a", { class: "media-link", href: src, download: "", target: "_blank", rel: "noopener" }, icon("download", 14), "Download");
+  if (url.startsWith("proxy:")) {
+    const box = h("div", { class: "media-box" }, h("p", { class: "step-wait" }, h("span", { class: "spinner sm" }), " Loading the video…"));
+    resolveMedia(url, connectionsRef).then(
+      (src) => box.replaceChildren(h("video", { class: "media", src, controls: true, playsinline: true }), download(src)),
+      (error: unknown) => box.replaceChildren(h("p", { class: "step-error" }, error instanceof Error ? error.message : String(error))),
+    );
+    return box;
+  }
+  return h(
+    "div",
+    { class: "media-box" },
+    isImage(url) ? h("img", { class: "media", src: url, alt, loading: "lazy" }) : h("video", { class: "media", src: url, controls: true, playsinline: true }),
+    download(url),
+  );
 }
 
 function copyButton(text: () => string, label = "Copy"): HTMLButtonElement {
@@ -180,7 +205,9 @@ function stepEl(step: StepRecord, compact: boolean): HTMLElement {
       ? h("p", { class: "step-error" }, step.error ?? "Failed.")
       : step.text
         ? markdownEl(step.text, `md step-md${compact ? " clamp" : ""}`)
-        : h("p", { class: "step-wait" }, "Thinking…");
+        : step.media
+          ? h("span")
+          : h("p", { class: "step-wait" }, step.progress ?? "Thinking…");
   const el = h(
     "div",
     { class: `step ${step.status}` },
@@ -219,7 +246,15 @@ function messageEl(ctx: Ctx, chat: Chat, m: Message): HTMLElement {
     return h(
       "div",
       { class: "msg user", "data-msg": m.id },
-      m.attachments?.length ? h("div", { class: "msg-files" }, ...m.attachments.map((a) => h("span", { class: "file-chip" }, icon("file", 14), a.name))) : null,
+      m.attachments?.length
+        ? h(
+            "div",
+            { class: "msg-files" },
+            ...m.attachments.map((a) =>
+              a.kind === "image" && a.data ? h("img", { class: "msg-image", src: dataUrlOf(a), alt: a.name }) : h("span", { class: "file-chip" }, icon("file", 14), a.name),
+            ),
+          )
+        : null,
       h("div", { class: "bubble" }, m.content),
       h("div", { class: "msg-actions" }, copyButton(() => m.content)),
     );
@@ -294,7 +329,7 @@ function fillAssistant(ctx: Ctx, chat: Chat, m: Message, el: HTMLElement): void 
       ),
     );
   } else if (isSolo && running && steps[0]) {
-    parts.push(steps[0].text ? markdownEl(steps[0].text, "md answer streaming") : h("p", { class: "step-wait" }, h("span", { class: "spinner sm" }), " Thinking…"));
+    parts.push(steps[0].text ? markdownEl(steps[0].text, "md answer streaming") : h("p", { class: "step-wait" }, h("span", { class: "spinner sm" }), ` ${steps[0].progress ?? "Thinking…"}`));
   } else if (final) {
     if (m.note) parts.push(h("p", { class: "note" }, m.note));
     parts.push(markdownEl(final.text, "md answer"), mediaEl(final.media, `Result from ${final.agentName}`));
@@ -351,9 +386,20 @@ function refresh(chat: Chat, m: Message): void {
 
 /* ---------- running a turn ---------- */
 
-function withAttachments(text: string, files: Attachment[] = []): string {
-  return [text, ...files.map((f) => `---\nAttached file: ${f.name}\n\`\`\`\n${f.text}\n\`\`\``)].join("\n\n");
+/** The message text with text attachments inlined; images are listed by name. */
+function withAttachments(text: string, files: Attachment[] = [], imagesInline = false): string {
+  return [
+    text,
+    ...files.map((f) =>
+      f.kind === "image" ? (imagesInline ? "" : `[Image attached earlier: ${f.name}]`) : `---\nAttached file: ${f.name}\n\`\`\`\n${f.text ?? ""}\n\`\`\``,
+    ),
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }
+
+const imagesOf = (m: Message): ImagePart[] =>
+  (m.attachments ?? []).flatMap((a) => (a.kind === "image" && a.data && a.mediaType ? [{ mediaType: a.mediaType, data: a.data }] : []));
 
 function historyBefore(chat: Chat, userMsg: Message): ChatTurn[] {
   const turns: ChatTurn[] = [];
@@ -402,7 +448,8 @@ async function runTurn(ctx: Ctx, chat: Chat, userMsg: Message): Promise<void> {
 
   const run = startRun({
     mode: chat.config.mode,
-    task: withAttachments(userMsg.content, userMsg.attachments),
+    task: withAttachments(userMsg.content, userMsg.attachments, true) || "Describe the attached image.",
+    images: imagesOf(userMsg),
     history: historyBefore(chat, userMsg),
     agents,
     lead,
@@ -529,13 +576,15 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig): HT
   const input = h("textarea", { rows: 1, placeholder: "Message your team…", "aria-label": "Message" });
   const files = h("div", { class: "composer-files" });
   const sendBtn = h("button", { class: "send-btn", type: "button" });
-  const fileInput = h("input", { type: "file", multiple: true, hidden: true, accept: ".txt,.md,.markdown,.csv,.json,.js,.ts,.tsx,.jsx,.py,.html,.css,.xml,.yaml,.yml,.toml,.sql,.sh,.go,.rs,.java,.kt,.swift,.c,.cpp,.h,.rb,.php,.log,text/*" });
+  const fileInput = h("input", { type: "file", multiple: true, hidden: true, accept: ACCEPT });
+  let reading = 0;
   composerState = { chatId: chat?.id, sendBtn, input };
 
   const sync = () => {
     input.style.height = "auto";
     if (input.scrollHeight) input.style.height = `${Math.min(input.scrollHeight, 240)}px`;
-    setSendButton(sendBtn, !!chat && runs.has(chat.id), !!input.value.trim() || pendingAttachments.length > 0);
+    setSendButton(sendBtn, !!chat && runs.has(chat.id), reading === 0 && (!!input.value.trim() || pendingAttachments.length > 0));
+    files.classList.toggle("reading", reading > 0);
   };
 
   const renderFiles = () =>
@@ -544,7 +593,7 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig): HT
         h(
           "span",
           { class: "file-chip" },
-          icon("file", 14),
+          f.kind === "image" && f.data ? h("img", { class: "chip-thumb", src: dataUrlOf(f), alt: "" }) : icon("file", 14),
           f.name,
           h(
             "button",
@@ -563,22 +612,36 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig): HT
       ),
     );
 
-  fileInput.addEventListener("change", async () => {
-    for (const file of fileInput.files ?? []) {
-      if (file.size > MAX_ATTACHMENT_BYTES) {
-        alert(`${file.name} is larger than 300 KB.`);
-        continue;
+  const addFiles = async (list: Iterable<File>) => {
+    const errors: string[] = [];
+    for (const file of list) {
+      if (pendingAttachments.length + reading >= 10) {
+        errors.push("Up to 10 attachments per message.");
+        break;
       }
-      const text = await file.text();
-      if (text.includes("\u0000")) {
-        alert(`${file.name} isn't a text file.`);
-        continue;
+      reading++;
+      sync();
+      try {
+        pendingAttachments.push(await readAttachment(file));
+      } catch (error) {
+        errors.push(error instanceof Error ? error.message : String(error));
       }
-      pendingAttachments.push({ name: file.name, size: file.size, text });
+      reading--;
+      renderFiles();
+      sync();
     }
+    if (errors.length) alert(errors.join("\n"));
+  };
+
+  fileInput.addEventListener("change", async () => {
+    await addFiles(fileInput.files ?? []);
     fileInput.value = "";
-    renderFiles();
-    sync();
+  });
+  input.addEventListener("paste", (e) => {
+    const files = [...(e.clipboardData?.files ?? [])];
+    if (!files.length) return;
+    e.preventDefault();
+    void addFiles(files);
   });
 
   const submit = () => {
@@ -586,6 +649,7 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig): HT
       runs.get(chat.id)?.abort();
       return;
     }
+    if (reading) return;
     const text = input.value.trim();
     if (!text && !pendingAttachments.length) return;
     input.value = "";
@@ -612,7 +676,7 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig): HT
     const lead = leadOf(ctx, config, team);
     const shown = config.mode === "solo" ? (lead ? [lead] : []) : team;
     bar.replaceChildren(
-      h("button", { class: "chip-btn icon-only", type: "button", title: "Attach text files", "aria-label": "Attach text files", onclick: () => fileInput.click() }, icon("clip")),
+      h("button", { class: "chip-btn icon-only", type: "button", title: "Attach images, PDFs or text files", "aria-label": "Attach files", onclick: () => fileInput.click() }, icon("clip")),
       h(
         "button",
         { class: "chip-btn", type: "button", "data-popover": "mode", "aria-haspopup": "dialog", onclick: (e) => openPopover(e.currentTarget as HTMLElement, modeMenu()) },
@@ -703,7 +767,12 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig): HT
               },
             }),
             h("span", { class: "avatar xs", style: `background:${a.color}` }, a.name.slice(0, 1)),
-            h("span", { class: "team-name" }, a.name, h("small", {}, problem ?? (a.model || PROVIDERS[connectionOf(ctx.state, a)?.provider ?? "custom"].label))),
+            h(
+              "span",
+              { class: "team-name" },
+              a.name,
+              h("small", {}, problem ?? [a.kind === "chat" ? "" : KIND_LABEL[a.kind], a.model || PROVIDERS[connectionOf(ctx.state, a)?.provider ?? "custom"].label].filter(Boolean).join(" · ")),
+            ),
           );
         }),
         !solo && mode.leadLabel && team.length
@@ -719,7 +788,7 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig): HT
                     changed();
                   },
                 },
-                ...team.map((a) => h("option", { value: a.id, selected: a.id === lead?.id }, a.name)),
+                ...team.filter((a) => a.kind === "chat").map((a) => h("option", { value: a.id, selected: a.id === lead?.id }, a.name)),
               ),
             )
           : null,
@@ -763,5 +832,16 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig): HT
   renderBar();
   sync();
   renderFiles();
-  return h("div", { class: "composer" }, files, input, bar, fileInput);
+  const composer = h("div", { class: "composer" }, files, input, bar, fileInput);
+  composer.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    composer.classList.add("drop");
+  });
+  composer.addEventListener("dragleave", () => composer.classList.remove("drop"));
+  composer.addEventListener("drop", (e) => {
+    e.preventDefault();
+    composer.classList.remove("drop");
+    void addFiles(e.dataTransfer?.files ?? []);
+  });
+  return composer;
 }
