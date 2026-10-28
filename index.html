@@ -6,9 +6,9 @@
     <meta name="theme-color" content="#f2f2f1" />
     <meta
       name="description"
-      content="Focus — one harness for every model and agent. Run Claude, GPT, Gemini and Grok together, plug in video generators and autonomous agents."
+      content="Focus — run Claude, GPT, Gemini and Grok together as one team, and plug in video generators and autonomous agents."
     />
-    <title>Focus — one harness for every model and agent</title>
+    <title>Focus</title>
     <link
       rel="preload"
       href="/fonts/inter-latin-wght.woff2"
@@ -23,26 +23,27 @@
     />
     <link rel="stylesheet" href="/src/style.css" />
   </head>
-  <body class="pre">
+  <body>
+    <div id="landing" class="landing pre" hidden>
     <div class="paper" aria-hidden="true">
       <svg class="lines" viewBox="0 0 1000 1000" preserveAspectRatio="none"></svg>
     </div>
 
     <header class="nav">
       <nav class="nav-group" aria-label="Primary">
-        <a href="./">Home</a>
-        <a href="app.html">Models</a>
-        <a href="app.html">Agents</a>
-        <a href="#">Contact Us</a>
+        <a href="/" data-route>Home</a>
+        <a href="/app" data-route>Chat</a>
+        <a href="/app/agents" data-route>Agents</a>
+        <a href="/app/modes" data-route>Modes</a>
       </nav>
       <nav class="nav-group nav-social" aria-label="Social">
-        <a href="#">Docs</a>
+        <a href="https://github.com/GX85/Landing-for-Claude-code-#readme">Docs</a>
         <a href="https://github.com/GX85/Landing-for-Claude-code-">GitHub</a>
       </nav>
     </header>
 
     <main class="hero">
-      <h1 class="sr-only">Focus — one harness for every model and agent</h1>
+      <h1 class="sr-only">Focus</h1>
       <div class="word">
         <span class="half half-a" aria-hidden="true">FO</span>
         <div class="pill">
@@ -80,15 +81,19 @@
 
     <footer class="foot">
       <p class="lede">
-        Every model in one harness. Plug in Claude, GPT, Gemini or Grok and let them work as a
+        Every model in one place. Plug in Claude, GPT, Gemini or Grok and let them work as a
         team — then add video generators and autonomous agents like Manus or Jules, all focused on
         one task.
       </p>
       <div class="foot-end">
         <span class="rule" aria-hidden="true"></span>
-        <a class="cta" href="app.html">Let's Focus</a>
+        <a class="cta" href="/app">Let's Focus</a>
       </div>
     </footer>
+
+    </div>
+
+    <div id="app" class="app-root" hidden></div>
 
     <script type="module" src="/src/main.ts"></script>
   </body>

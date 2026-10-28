@@ -18,10 +18,19 @@ export interface AgentConfig {
   effort?: Effort;
 }
 
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
 export interface RunInput {
   agent: AgentConfig;
   system?: string;
-  prompt: string;
+  /** The conversation so far; the last message is the user's turn. */
+  messages: ChatMessage[];
+  signal?: AbortSignal;
+  /** Called with each piece of streamed text. */
+  onText?: (delta: string) => void;
 }
 
 export interface RunResult {
@@ -29,6 +38,7 @@ export interface RunResult {
   model?: string;
   /** A media URL (video, image) returned by webhook agents such as video generators. */
   media?: string;
+  usage?: { input: number; output: number };
 }
 
 /** An error whose message is safe to show to the user. */
@@ -41,53 +51,60 @@ export class UserError extends Error {
   }
 }
 
-const REQUEST_TIMEOUT_MS = 280_000;
+const REQUEST_TIMEOUT_MS = 290_000;
 const XAI_BASE_URL = "https://api.x.ai/v1";
-const CLAUDE_MAX_TOKENS = 16000;
+const CLAUDE_MAX_TOKENS = 32000;
 // Models that accept server-side refusal fallbacks (`fallbacks: "default"`).
 const CLAUDE_FALLBACK_MODELS = /^claude-(fable|mythos|opus|sonnet)-5/;
+const TRUNCATED = "\n\n[Output cut at the token limit.]";
 
 /* ---------- run ---------- */
 
-export async function runAgent({ agent, system, prompt }: RunInput): Promise<RunResult> {
-  switch (agent.provider) {
+export async function runAgent(input: RunInput): Promise<RunResult> {
+  switch (input.agent.provider) {
     case "anthropic":
-      return runClaude(agent, system, prompt);
+      return runClaude(input);
     case "openai":
     case "xai":
     case "custom":
-      return runOpenAICompatible(agent, system, prompt);
+      return runOpenAICompatible(input);
     case "gemini":
-      return runGemini(agent, system, prompt);
+      return runGemini(input);
     case "webhook":
-      return runWebhook(agent, system, prompt);
+      return runWebhook(input);
   }
 }
 
-async function runClaude(agent: AgentConfig, system: string | undefined, prompt: string): Promise<RunResult> {
+async function runClaude({ agent, system, messages, signal, onText }: RunInput): Promise<RunResult> {
   const client = new Anthropic({ apiKey: agent.apiKey, timeout: REQUEST_TIMEOUT_MS, maxRetries: 1 });
   const useFallbacks = CLAUDE_FALLBACK_MODELS.test(agent.model);
 
-  const response = await client.beta.messages.create({
-    model: agent.model,
-    max_tokens: CLAUDE_MAX_TOKENS,
-    ...(system ? { system } : {}),
-    ...(agent.effort ? { output_config: { effort: agent.effort } } : {}),
-    ...(useFallbacks ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const } : {}),
-    messages: [{ role: "user", content: prompt }],
-  });
+  const stream = client.beta.messages.stream(
+    {
+      model: agent.model,
+      max_tokens: CLAUDE_MAX_TOKENS,
+      ...(system ? { system } : {}),
+      ...(agent.effort ? { output_config: { effort: agent.effort } } : {}),
+      ...(useFallbacks ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const } : {}),
+      messages,
+    },
+    { signal },
+  );
+  stream.on("text", (delta) => onText?.(delta));
+  const response = await stream.finalMessage();
 
   if (response.stop_reason === "refusal") {
     const category = response.stop_details?.category;
     throw new UserError(`Claude declined this request${category ? ` (${category})` : ""}.`, 422);
   }
 
-  const text = response.content
-    .flatMap((block) => (block.type === "text" ? [block.text] : []))
-    .join("\n\n")
-    .trim();
-  const truncated = response.stop_reason === "max_tokens" ? "\n\n[Output cut at the token limit.]" : "";
-  return { text: text + truncated, model: response.model };
+  // after a mid-stream fallback the next model continues the same text, so blocks join without a gap
+  const text = response.content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("");
+  return {
+    text: text.trim() + (response.stop_reason === "max_tokens" ? TRUNCATED : ""),
+    model: response.model,
+    usage: { input: response.usage.input_tokens, output: response.usage.output_tokens },
+  };
 }
 
 function openAIClient(agent: AgentConfig): OpenAI {
@@ -95,52 +112,96 @@ function openAIClient(agent: AgentConfig): OpenAI {
   return new OpenAI({ apiKey: agent.apiKey || "none", baseURL, timeout: REQUEST_TIMEOUT_MS, maxRetries: 1 });
 }
 
-async function runOpenAICompatible(agent: AgentConfig, system: string | undefined, prompt: string): Promise<RunResult> {
-  const completion = await openAIClient(agent).chat.completions.create({
-    model: agent.model,
-    messages: [...(system ? [{ role: "system" as const, content: system }] : []), { role: "user", content: prompt }],
-  });
-  const choice = completion.choices[0];
-  if (choice?.message?.refusal) throw new UserError(`The model declined: ${choice.message.refusal}`, 422);
-  const truncated = choice?.finish_reason === "length" ? "\n\n[Output cut at the token limit.]" : "";
-  return { text: (choice?.message?.content ?? "").trim() + truncated, model: completion.model };
+async function runOpenAICompatible({ agent, system, messages, signal, onText }: RunInput): Promise<RunResult> {
+  const stream = await openAIClient(agent).chat.completions.create(
+    {
+      model: agent.model,
+      messages: [...(system ? [{ role: "system" as const, content: system }] : []), ...messages],
+      stream: true,
+      // usage in the stream is an OpenAI extension that other endpoints may reject
+      ...(agent.provider === "openai" ? { stream_options: { include_usage: true } } : {}),
+    },
+    { signal },
+  );
+
+  let text = "";
+  let model = agent.model;
+  let finish: string | null | undefined;
+  let refusal = "";
+  let usage: RunResult["usage"];
+  for await (const chunk of stream) {
+    model = chunk.model || model;
+    if (chunk.usage) usage = { input: chunk.usage.prompt_tokens, output: chunk.usage.completion_tokens };
+    const choice = chunk.choices[0];
+    if (!choice) continue;
+    const delta = choice.delta?.content;
+    if (delta) {
+      text += delta;
+      onText?.(delta);
+    }
+    if (choice.delta?.refusal) refusal += choice.delta.refusal;
+    finish = choice.finish_reason ?? finish;
+  }
+  if (refusal && !text) throw new UserError(`The model declined: ${refusal}`, 422);
+  return { text: text.trim() + (finish === "length" ? TRUNCATED : ""), model, usage };
 }
 
-async function runGemini(agent: AgentConfig, system: string | undefined, prompt: string): Promise<RunResult> {
+async function runGemini({ agent, system, messages, signal, onText }: RunInput): Promise<RunResult> {
   const ai = new GoogleGenAI({ apiKey: agent.apiKey });
-  const response = await ai.models.generateContent({
+  const stream = await ai.models.generateContentStream({
     model: agent.model,
-    contents: prompt,
+    contents: messages.map((m) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] })),
     config: {
       ...(system ? { systemInstruction: system } : {}),
+      abortSignal: signal,
       httpOptions: { timeout: REQUEST_TIMEOUT_MS },
     },
   });
-  const text = response.text?.trim();
-  if (!text) {
-    const reason = response.promptFeedback?.blockReason ?? response.candidates?.[0]?.finishReason;
-    throw new UserError(`Gemini returned no text${reason ? ` (${reason})` : ""}.`, 422);
+
+  let text = "";
+  let model = agent.model;
+  let finish: string | undefined;
+  let blocked: string | undefined;
+  let usage: RunResult["usage"];
+  for await (const chunk of stream) {
+    const delta = chunk.text;
+    if (delta) {
+      text += delta;
+      onText?.(delta);
+    }
+    model = chunk.modelVersion ?? model;
+    finish = chunk.candidates?.[0]?.finishReason ?? finish;
+    blocked = chunk.promptFeedback?.blockReason ?? blocked;
+    const meta = chunk.usageMetadata;
+    if (meta) usage = { input: meta.promptTokenCount ?? 0, output: meta.candidatesTokenCount ?? 0 };
   }
-  return { text, model: response.modelVersion ?? agent.model };
+  if (!text.trim()) throw new UserError(`Gemini returned no text${blocked || finish ? ` (${blocked ?? finish})` : ""}.`, 422);
+  return { text: text.trim() + (finish === "MAX_TOKENS" ? TRUNCATED : ""), model, usage };
 }
 
 const MEDIA_URL = /^https?:\/\/\S+\.(mp4|webm|mov|png|jpe?g|gif|webp)(\?\S*)?$/i;
 
 /**
- * A generic HTTP agent: POSTs `{ task, system, model }` as JSON and reads back text
- * or a media URL. Lets you plug in video generators and autonomous agents through
- * a small endpoint of your own.
+ * A generic HTTP agent: POSTs `{ task, system, model, history }` as JSON and reads
+ * back text or a media URL. Lets you plug in video generators and autonomous agents
+ * through a small endpoint of your own.
  */
-async function runWebhook(agent: AgentConfig, system: string | undefined, prompt: string): Promise<RunResult> {
+async function runWebhook({ agent, system, messages, signal }: RunInput): Promise<RunResult> {
   const url = checkUrl(agent.baseUrl);
+  const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
   const res = await fetch(url, {
     method: "POST",
     headers: {
       "content-type": "application/json",
       ...(agent.apiKey ? { authorization: `Bearer ${agent.apiKey}` } : {}),
     },
-    body: JSON.stringify({ task: prompt, system: system ?? "", model: agent.model || undefined }),
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    body: JSON.stringify({
+      task: messages.at(-1)?.content ?? "",
+      system: system ?? "",
+      model: agent.model || undefined,
+      history: messages.slice(0, -1),
+    }),
+    signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
   });
   const raw = await res.text();
   if (!res.ok) throw new UserError(`Agent endpoint answered ${res.status}: ${raw.slice(0, 300)}`, 502);
@@ -219,10 +280,11 @@ function checkUrl(value: string | undefined): string {
   return url.toString().replace(/\/$/, "");
 }
 
+const str = (v: unknown, max = 4000) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+
 export function parseAgent(value: unknown): AgentConfig {
   if (!value || typeof value !== "object") throw new UserError("Missing agent.");
   const a = value as Record<string, unknown>;
-  const str = (v: unknown, max = 4000) => (typeof v === "string" ? v.trim().slice(0, max) : "");
   const provider = str(a.provider) as Provider;
   if (!PROVIDERS.includes(provider)) throw new UserError("Unknown provider.");
   const effort = str(a.effort) as Effort;
@@ -235,6 +297,28 @@ export function parseAgent(value: unknown): AgentConfig {
   };
 }
 
+const MAX_CONVERSATION_CHARS = 600_000;
+
+/** Accepts `messages` (a conversation) or a single `prompt`. */
+export function parseMessages(body: Record<string, unknown>): ChatMessage[] {
+  const list: ChatMessage[] = Array.isArray(body.messages)
+    ? body.messages.flatMap((m: unknown): ChatMessage[] => {
+        if (!m || typeof m !== "object") return [];
+        const { role, content } = m as Record<string, unknown>;
+        if ((role !== "user" && role !== "assistant") || typeof content !== "string" || !content.trim()) return [];
+        return [{ role, content }];
+      })
+    : typeof body.prompt === "string" && body.prompt.trim()
+      ? [{ role: "user", content: body.prompt }]
+      : [];
+  while (list.length && list[0].role !== "user") list.shift();
+  if (!list.length || list.at(-1)!.role !== "user") throw new UserError("The task is empty.");
+  if (list.reduce((n, m) => n + m.content.length, 0) > MAX_CONVERSATION_CHARS) {
+    throw new UserError("The conversation is too long. Start a new chat.");
+  }
+  return list;
+}
+
 /* ---------- http ---------- */
 
 export function json(data: unknown, status = 200): Response {
@@ -244,9 +328,12 @@ export function json(data: unknown, status = 200): Response {
   });
 }
 
-/** Turns provider SDK errors into a short message without echoing request details. */
-export function errorResponse(error: unknown): Response {
-  if (error instanceof UserError) return json({ error: error.message }, error.status);
+/** A short, user-facing description of a failure that never echoes request details. */
+export function describeError(error: unknown): { message: string; status: number } {
+  if (error instanceof UserError) return { message: error.message, status: error.status };
+  if (error instanceof Anthropic.APIUserAbortError || (error instanceof Error && error.name === "AbortError")) {
+    return { message: "Stopped.", status: 499 };
+  }
   if (error instanceof Anthropic.APIError || error instanceof OpenAI.APIError || error instanceof GeminiApiError) {
     const status = error.status ?? 502;
     const hint =
@@ -258,13 +345,18 @@ export function errorResponse(error: unknown): Response {
             ? "Rate limited by the provider — try again shortly."
             : "";
     const detail = cleanMessage(providerMessage(error));
-    return json({ error: [hint, detail].filter(Boolean).join(" ") }, status >= 400 && status < 600 ? status : 502);
+    return { message: [hint, detail].filter(Boolean).join(" "), status: status >= 400 && status < 600 ? status : 502 };
   }
   if (error instanceof Error) {
-    if (error.name === "TimeoutError" || error.name === "AbortError") return json({ error: "The provider took too long to answer." }, 504);
-    return json({ error: cleanMessage(error.message) || "The provider call failed." }, 502);
+    if (error.name === "TimeoutError") return { message: "The provider took too long to answer.", status: 504 };
+    return { message: cleanMessage(error.message) || "The provider call failed.", status: 502 };
   }
-  return json({ error: "The provider call failed." }, 502);
+  return { message: "The provider call failed.", status: 502 };
+}
+
+export function errorResponse(error: unknown): Response {
+  const { message, status } = describeError(error);
+  return json({ error: message }, status);
 }
 
 /** The provider's own error text, without the status line and raw JSON around it. */

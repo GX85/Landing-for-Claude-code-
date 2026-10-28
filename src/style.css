@@ -58,11 +58,15 @@ body {
 }
 
 /* Hidden until fonts are ready and the timeline is armed. */
-.pre .paper,
-.pre .nav,
-.pre .hero,
-.pre .foot {
+.landing.pre .paper,
+.landing.pre .nav,
+.landing.pre .hero,
+.landing.pre .foot {
   visibility: hidden;
+}
+
+[hidden] {
+  display: none !important;
 }
 
 .sr-only {

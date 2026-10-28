@@ -1,8 +1,7 @@
 import { defineConfig, type Plugin } from "vite";
-import { resolve } from "node:path";
 import { Readable } from "node:stream";
 
-/** Serves the Vercel functions in `api/` during `npm run dev`. */
+/** Serves the Vercel functions in `api/` during `npm run dev`, streaming included. */
 function devApi(): Plugin {
   return {
     name: "focus-dev-api",
@@ -10,6 +9,8 @@ function devApi(): Plugin {
       server.middlewares.use(async (req, res, next) => {
         const match = req.url?.match(/^\/api\/(run|models)(\?.*)?$/);
         if (!match) return next();
+        const abort = new AbortController();
+        res.on("close", () => abort.abort());
         try {
           const mod = await server.ssrLoadModule(`/api/${match[1]}.ts`);
           const request = new Request(new URL(req.url!, "http://localhost"), {
@@ -17,13 +18,19 @@ function devApi(): Plugin {
             headers: req.headers as Record<string, string>,
             body: req.method === "GET" || req.method === "HEAD" ? undefined : (Readable.toWeb(req) as ReadableStream),
             duplex: "half",
+            signal: abort.signal,
           } as RequestInit);
           const response: Response = await mod.default.fetch(request);
           res.statusCode = response.status;
           response.headers.forEach((value, key) => res.setHeader(key, value));
-          res.end(Buffer.from(await response.arrayBuffer()));
+          res.flushHeaders();
+          if (response.body) {
+            for await (const chunk of response.body as unknown as AsyncIterable<Uint8Array>) res.write(chunk);
+          }
+          res.end();
         } catch (error) {
-          next(error);
+          if (!res.headersSent) next(error);
+          else res.end();
         }
       });
     },
@@ -31,14 +38,5 @@ function devApi(): Plugin {
 }
 
 export default defineConfig({
-  base: "./",
   plugins: [devApi()],
-  build: {
-    rollupOptions: {
-      input: {
-        main: resolve(import.meta.dirname, "index.html"),
-        app: resolve(import.meta.dirname, "app.html"),
-      },
-    },
-  },
 });

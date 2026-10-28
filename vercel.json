@@ -3,5 +3,9 @@
   "functions": {
     "api/*.ts": { "maxDuration": 300 }
   },
-  "rewrites": [{ "source": "/app", "destination": "/app.html" }]
+  "redirects": [{ "source": "/app.html", "destination": "/app", "permanent": false }],
+  "rewrites": [
+    { "source": "/app", "destination": "/index.html" },
+    { "source": "/app/:path*", "destination": "/index.html" }
+  ]
 }
