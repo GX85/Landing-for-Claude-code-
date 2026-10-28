@@ -1,3 +1,4 @@
+import { requireUser } from "./_lib/auth.js";
 import { describeError, errorResponse, parseAgent, parseMessages, readJson, runAgent, UserError } from "./_lib/providers.js";
 
 /**
@@ -10,6 +11,8 @@ import { describeError, errorResponse, parseAgent, parseMessages, readJson, runA
  */
 export default {
   async fetch(request: Request): Promise<Response> {
+    const denied = requireUser(request);
+    if (denied) return denied;
     let input;
     try {
       const body = await readJson(request);

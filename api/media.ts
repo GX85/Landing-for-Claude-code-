@@ -1,9 +1,12 @@
+import { requireUser } from "./_lib/auth.js";
 import { errorResponse, parseAgent, readJson, UserError } from "./_lib/providers.js";
 import { fetchMedia } from "./_lib/jobs.js";
 
 /** POST /api/media — streams a generated file that needs the connection's key to download. */
 export default {
   async fetch(request: Request): Promise<Response> {
+    const denied = requireUser(request);
+    if (denied) return denied;
     try {
       const body = await readJson(request);
       const agent = parseAgent(body.agent);

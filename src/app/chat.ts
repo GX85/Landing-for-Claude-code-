@@ -5,7 +5,8 @@ import { renderMarkdown } from "./markdown";
 import { ACCEPT, dataUrlOf, readAttachment } from "./attachments";
 import { resolveMedia, type ImagePart } from "./api";
 import { modeInfo, MODES, startRun } from "./modes";
-import { connectionOf, isReady, KIND_LABEL, missing, PROVIDERS, uid, type Agent, type Attachment, type Chat, type ChatConfig, type Message, type StepRecord } from "./store";
+import { click, setSound } from "./sound";
+import { allSkills, avatarOf, connectionOf, isReady, KIND_LABEL, missing, PROVIDERS, uid, type Agent, type Attachment, type Chat, type ChatConfig, type Message, type StepRecord } from "./store";
 
 const SCENE_VIDEO = "https://d2ol7oe51mr4n9.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/175fbbcd-e50a-480c-bab2-ca16d4678322.mp4";
 const SCENE_POSTER = "https://d2ol7oe51mr4n9.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/726b168c-da47-4682-a255-cc3e02f89bae.jpg";
@@ -40,8 +41,29 @@ export function renderChat(main: HTMLElement, ctx: Ctx, chat: Chat | undefined):
   const scroller = h("div", { class: "chat-scroll" }, list);
   view = { chatId: chat?.id, list, scroller, ctx };
 
+  const soundBtn = h(
+    "button",
+    {
+      class: "icon-btn sound-btn",
+      type: "button",
+      title: "Typing sound",
+      "aria-label": "Typing sound",
+      "aria-pressed": String(ctx.state.sound),
+      onclick: (e: Event) => {
+        ctx.state.sound = !ctx.state.sound;
+        setSound(ctx.state.sound);
+        (e.currentTarget as HTMLElement).setAttribute("aria-pressed", String(ctx.state.sound));
+        ctx.persist();
+        if (ctx.state.sound) click();
+      },
+    },
+    "⌨",
+  );
+  setSound(ctx.state.sound);
+
   const head = pageHead(
     chat ? h("span", { class: "chat-name", title: chat.title }, chat.title) : h("span", { class: "chat-name muted" }, "New chat"),
+    soundBtn,
     chat
       ? h("button", { class: "icon-btn", type: "button", title: "Export as Markdown", "aria-label": "Export as Markdown", onclick: () => exportChat(chat) }, icon("download"))
       : null,
@@ -214,7 +236,7 @@ function stepEl(step: StepRecord, compact: boolean): HTMLElement {
     h(
       "div",
       { class: "step-head" },
-      step.status === "running" ? h("span", { class: "spinner sm" }) : h("span", { class: "avatar sm", style: `background:${step.color}` }, step.agentName.slice(0, 1)),
+      step.status === "running" ? h("span", { class: "spinner sm" }) : h("span", { class: "avatar sm", style: `background:${step.color}` }, avatarOf(step)),
       h("span", { class: "step-who" }, step.agentName),
       h("span", { class: "step-phase" }, step.phase),
       h("span", { class: "step-time" }, step.status === "error" ? "failed" : stepTime(step)),
@@ -275,7 +297,7 @@ function fillAssistant(ctx: Ctx, chat: Chat, m: Message, el: HTMLElement): void 
   const head = h(
     "div",
     { class: "msg-head" },
-    h("span", { class: "avatars" }, ...names.slice(0, 4).map((s) => h("span", { class: "avatar", style: `background:${s.color}`, title: s.agentName }, s.agentName.slice(0, 1)))),
+    h("span", { class: "avatars" }, ...names.slice(0, 4).map((s) => h("span", { class: "avatar", style: `background:${s.color}`, title: s.agentName }, avatarOf(s)))),
     h("span", { class: "msg-mode" }, icon(mode.icon, 15), mode.name),
     h("span", { class: "msg-team" }, names.map((s) => s.agentName).join(", ")),
   );
@@ -455,6 +477,7 @@ async function runTurn(ctx: Ctx, chat: Chat, userMsg: Message): Promise<void> {
     lead,
     rounds: chat.config.rounds,
     connectionOf: (a) => connectionOf(ctx.state, a)!,
+    skills: allSkills(ctx.state),
     signal: controller.signal,
     onChange: () => refresh(chat, m),
   });
@@ -670,6 +693,7 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig): HT
 
   input.addEventListener("input", sync);
   input.addEventListener("keydown", (e) => {
+    if (!e.repeat && (e.key.length === 1 || e.key === "Backspace" || e.key === "Enter")) click(e.key === "Enter" ? 1.3 : 1);
     if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
       e.preventDefault();
       submit();
@@ -695,7 +719,7 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig): HT
       h(
         "button",
         { class: "chip-btn", type: "button", "data-popover": "team", "aria-haspopup": "dialog", onclick: (e) => openPopover(e.currentTarget as HTMLElement, teamMenu()) },
-        h("span", { class: "avatars" }, ...shown.slice(0, 4).map((a) => h("span", { class: "avatar xs", style: `background:${a.color}` }, a.name.slice(0, 1)))),
+        h("span", { class: "avatars" }, ...shown.slice(0, 4).map((a) => h("span", { class: "avatar xs", style: `background:${a.color}` }, avatarOf(a)))),
         shown.length === 1 ? shown[0].name : shown.length ? `${shown.length} agents` : "No agents",
         icon("chevron", 14),
       ),
@@ -774,7 +798,7 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig): HT
                 render();
               },
             }),
-            h("span", { class: "avatar xs", style: `background:${a.color}` }, a.name.slice(0, 1)),
+            h("span", { class: "avatar xs", style: `background:${a.color}` }, avatarOf(a)),
             h(
               "span",
               { class: "team-name" },

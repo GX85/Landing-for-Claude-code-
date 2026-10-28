@@ -13,7 +13,6 @@ const root = document.getElementById("landing")!;
 const $ = <T extends Element>(sel: string) => root.querySelector<T>(sel)!;
 
 const paper = $<HTMLElement>(".paper");
-const lines = $<SVGSVGElement>(".lines");
 const nav = $<HTMLElement>(".nav");
 const word = $<HTMLElement>(".word");
 const pill = $<HTMLElement>(".pill");
@@ -28,33 +27,6 @@ const cta = $<HTMLAnchorElement>(".cta");
 const phoneQuery = matchMedia("(max-width: 720px)");
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const recording = new URLSearchParams(location.search).get("rec") === "1";
-
-/* ---------- background lines ---------- */
-
-function drawLines(): void {
-  // small deterministic PRNG so the strokes are identical on every load
-  let seed = 7;
-  const rand = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
-  const ns = "http://www.w3.org/2000/svg";
-  const count = 15;
-
-  for (let i = 0; i < count; i++) {
-    const t = i / (count - 1);
-    const x = -520 + t * 1180 + (rand() - 0.5) * 60;
-    const lift = (rand() - 0.5) * 120;
-    const d = [
-      `M ${x} ${1090 + lift * 0.3}`,
-      `C ${x + 230} ${880 + lift} ${x + 120} ${560 + lift} ${x + 430} ${430 + lift * 0.6}`,
-      `S ${x + 720} ${120 + lift * 0.4} ${x + 1080} ${-90}`,
-    ].join(" ");
-
-    const path = document.createElementNS(ns, "path");
-    path.setAttribute("d", d);
-    path.setAttribute("stroke-width", (1.2 + rand() * 2.7).toFixed(2));
-    path.setAttribute("opacity", (0.55 + rand() * 0.3).toFixed(2));
-    lines.appendChild(path);
-  }
-}
 
 /* ---------- the reveal timeline ---------- */
 
@@ -255,7 +227,6 @@ async function fontsReady(): Promise<void> {
 let started = false;
 
 async function start(): Promise<void> {
-  drawLines();
   if (reducedMotion) {
     video.removeAttribute("autoplay");
     video.pause();

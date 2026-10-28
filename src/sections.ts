@@ -3,6 +3,7 @@ import "@fontsource/hurricane/latin-400.css";
 import "@fontsource/pixelify-sans/latin-700.css";
 import "@fontsource/instrument-serif/latin-400.css";
 import "./sections.css";
+import "./dark.css";
 
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -160,7 +161,13 @@ function setupLive(): void {
 
 function setupGlassLight(): void {
   if (reducedMotion || !matchMedia("(hover: hover)").matches) return;
+  const paper = root.querySelector<HTMLElement>(".paper");
+  root.addEventListener("pointerleave", () => paper?.style.setProperty("--lit", "0"));
   root.addEventListener("pointermove", (e) => {
+    // light up the floor cells around the pointer
+    paper?.style.setProperty("--cx", `${e.clientX}px`);
+    paper?.style.setProperty("--cy", `${e.clientY}px`);
+    paper?.style.setProperty("--lit", "1");
     const el = (e.target as Element).closest<HTMLElement>(".glass, .glass-nav");
     if (!el) return;
     const r = el.getBoundingClientRect();

@@ -1,3 +1,4 @@
+import { requireUser } from "./_lib/auth.js";
 import { errorResponse, json, parseAgent, parseImages, readJson, UserError } from "./_lib/providers.js";
 import { pollJob, startJob, type JobState } from "./_lib/jobs.js";
 
@@ -8,6 +9,8 @@ import { pollJob, startJob, type JobState } from "./_lib/jobs.js";
  */
 export default {
   async fetch(request: Request): Promise<Response> {
+    const denied = requireUser(request);
+    if (denied) return denied;
     try {
       const body = await readJson(request);
       const agent = parseAgent(body.agent);

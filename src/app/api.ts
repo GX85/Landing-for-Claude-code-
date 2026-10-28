@@ -88,6 +88,49 @@ async function callOllama(agent: Agent, conn: Connection, system: string, messag
   return { text: text.trim(), model: model ?? agent.model };
 }
 
+const FREE_URLS: Record<string, string> = {
+  llm7: "https://api.llm7.io/v1/chat/completions",
+  pollinations: "https://text.pollinations.ai/openai",
+};
+
+/** Hides `<think>` reasoning that some free models put in their answer. */
+const stripThinking = (text: string) => text.replace(/<think>[\s\S]*?(<\/think>|$)/g, "").replace(/^\s+/, "");
+
+/**
+ * Free Focus models without a key run straight from the browser, so each
+ * visitor gets their own fair-use quota. If the chosen one fails, the
+ * Pollinations model takes over.
+ */
+async function callFree(model: string, system: string, messages: ChatTurn[], signal: AbortSignal, onText: (full: string) => void): Promise<CallResult> {
+  const body = (id: string) =>
+    JSON.stringify({
+      model: id,
+      stream: true,
+      messages: [
+        { role: "system", content: system },
+        ...messages.map((m) => ({ role: m.role, content: m.images?.length ? `${m.content}\n\n[An image was attached, but this free model can't see images.]` : m.content })),
+      ],
+    });
+  const attempt = async (full: string): Promise<CallResult> => {
+    const [host, ...rest] = full.split("/");
+    const id = rest.join("/");
+    const res = await fetch(FREE_URLS[host], { method: "POST", headers: { "content-type": "application/json" }, body: body(id), signal });
+    if (!res.ok || !res.body) throw new Error(`The free model answered ${res.status}.`);
+    const { text } = await readSse(res, (t) => onText(stripThinking(t)));
+    const clean = stripThinking(text).trim();
+    if (!clean) throw new Error("The free model sent an empty answer.");
+    return { text: clean, model: id };
+  };
+  try {
+    return await attempt(model);
+  } catch (error) {
+    const fallback = "pollinations/openai-fast";
+    if (signal.aborted || model === fallback) throw error;
+    onText("");
+    return attempt(fallback);
+  }
+}
+
 /** Calls one chat agent and streams its text into `onText`. */
 export async function callAgent(
   agent: Agent,
@@ -98,6 +141,7 @@ export async function callAgent(
   onText: (full: string) => void,
 ): Promise<CallResult> {
   if (conn.provider === "ollama") return callOllama(agent, conn, system, messages, signal, onText);
+  if (conn.provider === "focus" && agent.kind === "chat" && /^(llm7|pollinations)\//.test(agent.model)) return callFree(agent.model, system, messages, signal, onText);
 
   const res = await fetch("/api/run", {
     method: "POST",

@@ -52,7 +52,100 @@ export interface Agent {
   role: string;
   color: string;
   enabled: boolean;
+  /** Ids of skills this agent uses. */
+  skills: string[];
+  /** One or two characters (or an emoji) shown in place of the initial. */
+  avatar: string;
 }
+
+/** A reusable set of instructions that agents can be given. */
+export interface Skill {
+  id: string;
+  name: string;
+  description: string;
+  instructions: string;
+  builtIn?: boolean;
+}
+
+/** Free chat models that work with no key. Keyless ones run straight from the browser. */
+export const FREE_MODELS: { id: string; label: string; note: string }[] = [
+  { id: "llm7/nemotron-3-nano:30b", label: "NVIDIA Nemotron 3 Nano 30B", note: "Fast, good all-rounder" },
+  { id: "llm7/minimax-m2.7", label: "MiniMax M2.7", note: "Reasons before answering" },
+  { id: "llm7/mistral-Nemo-Instruct-2407", label: "Mistral Nemo 12B", note: "Quick and concise" },
+  { id: "llm7/gpt-oss:20b", label: "GPT-OSS 20B", note: "OpenAI's open model" },
+  { id: "llm7/codestral-latest", label: "Codestral", note: "Made for code" },
+  { id: "pollinations/openai-fast", label: "GPT-OSS 20B · Pollinations", note: "A second free server" },
+];
+
+export const freeModelLabel = (id: string) => FREE_MODELS.find((m) => m.id === id)?.label ?? id.replace(/^openrouter\//, "").replace(/:free$/, " (free)");
+
+/** What an agent's round badge shows: its avatar, or the first letter of its name. */
+export const avatarOf = (a: { avatar?: string; name?: string; agentName?: string }) => [...(a.avatar?.trim() || a.name || a.agentName || "?")].slice(0, a.avatar?.trim() ? 2 : 1).join("");
+
+export const allSkills = (state: { skills?: Skill[] }): Skill[] => [...BUILTIN_SKILLS.map((s) => ({ ...s, builtIn: true })), ...(state.skills ?? [])];
+
+export const BUILTIN_SKILLS: Skill[] = [
+  {
+    id: "lang",
+    name: "Match my language",
+    description: "Always answers in the language you write in.",
+    instructions: "Always reply in the same language the user writes in, even if earlier messages or attachments use another language.",
+  },
+  {
+    id: "research",
+    name: "Research brief",
+    description: "Structured findings with sources and confidence.",
+    instructions: "Structure answers as a research brief: a one-paragraph summary, key findings as bullets, then open questions. Say how confident you are in each finding and name sources when you know them. Never invent citations.",
+  },
+  {
+    id: "code-review",
+    name: "Code review",
+    description: "Finds bugs, security issues and risky code first.",
+    instructions: "When given code, review it like a senior engineer: list real bugs and security problems first (with the line or snippet), then risky patterns, then small improvements. Show fixed code for each important issue. Do not nitpick style unless asked.",
+  },
+  {
+    id: "coder",
+    name: "Production code",
+    description: "Complete, runnable code with brief explanations.",
+    instructions: "Write complete, runnable, idiomatic code with error handling. Prefer the standard library. Put code in fenced blocks with the language, and keep explanations short and after the code.",
+  },
+  {
+    id: "copy",
+    name: "Copywriting",
+    description: "Punchy marketing copy with variants.",
+    instructions: "Write clear, benefit-led marketing copy. Lead with the strongest idea, keep sentences short, avoid clichés, and offer three distinct variants when writing headlines or slogans.",
+  },
+  {
+    id: "summarize",
+    name: "Summaries",
+    description: "TL;DR first, then the key points.",
+    instructions: "Start with a one-sentence TL;DR in bold, then at most five key points as bullets, then any action items. Keep the original meaning; do not add facts.",
+  },
+  {
+    id: "visual-prompt",
+    name: "Visual prompts",
+    description: "Turns ideas into prompts for image and video generators.",
+    instructions: "When the result will go to an image or video generator, write a single vivid prompt: subject, setting, lighting, camera angle and lens, motion (for video), mood, style and colour palette. No more than 80 words, no lists, no explanations.",
+  },
+  {
+    id: "teacher",
+    name: "Explain simply",
+    description: "Clear explanations with examples and analogies.",
+    instructions: "Explain step by step in plain words, as to a smart beginner. Use one concrete example and one analogy, define any jargon, and end with a two-line recap.",
+  },
+  {
+    id: "seo",
+    name: "SEO",
+    description: "Titles, meta descriptions and keywords.",
+    instructions: "Optimise for search: suggest a title under 60 characters, a meta description under 155 characters, a primary keyword and 5 related keywords, and an H1/H2 outline. Keep it natural, never keyword-stuffed.",
+  },
+  {
+    id: "fact-check",
+    name: "Fact-check",
+    description: "Checks each claim and flags doubtful ones.",
+    instructions: "Check every factual claim in the text you are given. Mark each as correct, doubtful or wrong, explain briefly why, and give the corrected statement where needed.",
+  },
+];
 
 export interface ChatConfig {
   mode: ModeId;
@@ -62,6 +155,7 @@ export interface ChatConfig {
 }
 
 export interface StepRecord {
+  avatar?: string;
   id: number;
   agentId: string;
   agentName: string;
@@ -125,6 +219,10 @@ export interface State {
   /** The setup new chats start with. */
   config: ChatConfig;
   sidebarCollapsed: boolean;
+  /** Skills the user wrote; built-in ones live in BUILTIN_SKILLS. */
+  skills: Skill[];
+  /** Mechanical key clicks while typing and while answers stream. */
+  sound: boolean;
   version?: number;
 }
 
@@ -160,12 +258,12 @@ export const PROVIDERS: Record<Provider, ProviderInfo> = {
     group: "free",
     agentName: "Focus",
     kinds: ["chat", "image"],
-    models: { chat: "openai-fast", image: "" },
+    models: { chat: "llm7/nemotron-3-nano:30b", image: "" },
     keyPlaceholder: "",
     needsKey: false,
     needsUrl: false,
     builtIn: true,
-    hint: "Built in and free: no key, no sign-up. Chat runs on an open model (GPT-OSS 20B); Focus Image makes one free picture every 45 seconds. The free model can't see attached images — add a key for that.",
+    hint: "Built in and free: no key, no sign-up. Pick a free model on the Agents page — NVIDIA Nemotron 3 Nano, MiniMax, Mistral, GPT-OSS or Codestral; they run straight from your browser with a fair-use limit. Focus Image makes one free picture every 45 seconds. Free models can't see attached images.",
     color: "#1d1d1d",
   },
   openrouter: {
@@ -398,10 +496,12 @@ export function newAgent(connection: Connection, kind?: AgentKind): Agent {
     role: "",
     color: info.color,
     enabled: true,
+    skills: [],
+    avatar: "",
   };
 }
 
-const STATE_VERSION = 3;
+const STATE_VERSION = 4;
 
 function focusAgents(focus: Connection): Agent[] {
   return [newAgent(focus, "chat"), { ...newAgent(focus, "image"), name: "Focus Image" }];
@@ -418,6 +518,8 @@ function defaults(): State {
     // works right away: a one-on-one chat with the free model
     config: { mode: "solo", agentIds: agents.filter((a) => a.kind === "chat").map((a) => a.id), leadId: agents[0].id, rounds: 2 },
     sidebarCollapsed: false,
+    skills: [],
+    sound: true,
     version: STATE_VERSION,
   };
 }
@@ -436,6 +538,15 @@ function upgrade(state: State): State {
       state.config.mode = "solo";
       state.config.leadId = added[0].id;
     }
+  }
+  // v4: skills, avatars, sound, and a choice of free models
+  state.skills ??= [];
+  state.sound ??= true;
+  const focusIds = new Set(state.connections.filter((c) => c.provider === "focus").map((c) => c.id));
+  for (const a of state.agents) {
+    a.skills ??= [];
+    a.avatar ??= "";
+    if (focusIds.has(a.connectionId) && a.kind === "chat" && !/^(llm7|pollinations|openrouter)\//.test(a.model)) a.model = PROVIDERS.focus.models.chat!;
   }
   state.version = STATE_VERSION;
   return state;

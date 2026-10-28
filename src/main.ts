@@ -2,6 +2,7 @@ import { hideLanding, showLanding } from "./landing";
 import { parseRoute, routePath, type Route } from "./router";
 
 const appRoot = document.getElementById("app")!;
+const signinRoot = document.body.appendChild(Object.assign(document.createElement("div"), { id: "signin", hidden: true }));
 let app: typeof import("./app/app") | undefined;
 const loadApp = () => import("./app/app");
 
@@ -18,11 +19,25 @@ async function apply(route: Route): Promise<void> {
   if (route.name === "landing") {
     app?.unmount();
     appRoot.hidden = true;
+    signinRoot.hidden = true;
     document.title = "Focus";
     if (current !== "landing") void showLanding((path) => void navigate(path));
     current = route.name;
     return;
   }
+
+  const { authInfo, renderSignIn } = await import("./app/signin");
+  const auth = await authInfo();
+  if (auth.enabled && !auth.user) {
+    hideLanding();
+    appRoot.hidden = true;
+    current = undefined;
+    document.title = "Sign in · Focus";
+    signinRoot.hidden = false;
+    renderSignIn(signinRoot, auth, () => location.assign("/app"));
+    return;
+  }
+  signinRoot.hidden = true;
 
   app ??= await loadApp();
   if (current === "landing" || current === undefined) {

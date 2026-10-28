@@ -134,9 +134,14 @@ const imageNote = (m: ChatMessage) => (m.images?.length ? `\n\n[${m.images.lengt
  * that instead, which allows more models and higher limits.
  */
 async function runFocus(input: RunInput): Promise<RunResult> {
+  if (input.agent.model.startsWith("openrouter/")) {
+    const orKey = process.env.FOCUS_OPENROUTER_KEY;
+    if (!orKey) throw new UserError("This free model needs Focus's OpenRouter key on the server (FOCUS_OPENROUTER_KEY). Pick another free model.", 503);
+    return runOpenAICompatible({ ...input, agent: { ...input.agent, provider: "openrouter", apiKey: orKey, model: input.agent.model.slice("openrouter/".length) } });
+  }
   const key = process.env.FOCUS_POLLINATIONS_KEY;
   if (key) {
-    return runOpenAICompatible({ ...input, agent: { ...input.agent, provider: "pollinations", apiKey: key, model: input.agent.model || FOCUS_FREE_MODEL } });
+    return runOpenAICompatible({ ...input, agent: { ...input.agent, provider: "pollinations", apiKey: key, model: FOCUS_FREE_MODEL } });
   }
   const { system, messages, signal, onText } = input;
   const res = await fetch(POLLINATIONS_FREE_URL, {
@@ -251,9 +256,31 @@ function openAIContent(m: ChatMessage): OpenAIContent {
   return [{ type: "text", text: m.content }, ...m.images.map((i) => ({ type: "image_url" as const, image_url: { url: `data:${i.mediaType};base64,${i.data}` } }))];
 }
 
-async function runOpenAICompatible({ agent, system, messages, signal, onText }: RunInput): Promise<RunResult> {
+/** Reasoning effort in each API's own words; Claude-only levels fold into "high". */
+const plainEffort = (e?: Effort) => (!e ? undefined : e === "xhigh" || e === "max" ? "high" : e);
+const GEMINI_BUDGET: Record<string, number> = { low: 1024, medium: 8192, high: 24576 };
+
+/** Runs a call with the effort setting, and once more without it if the model rejects it. */
+async function withEffort<T>(input: RunInput, call: (useEffort: boolean) => Promise<T>): Promise<T> {
+  if (!input.agent.effort) return call(false);
+  try {
+    return await call(true);
+  } catch (error) {
+    const status = (error as { status?: number }).status;
+    if (status === 400 || status === 422) return call(false);
+    throw error;
+  }
+}
+
+function runOpenAICompatible(input: RunInput): Promise<RunResult> {
+  return withEffort(input, (useEffort) => runOpenAICompatibleOnce(input, useEffort));
+}
+
+async function runOpenAICompatibleOnce({ agent, system, messages, signal, onText }: RunInput, useEffort: boolean): Promise<RunResult> {
+  const effort = useEffort ? plainEffort(agent.effort) : undefined;
   const stream = await openAIClient(agent).chat.completions.create(
     {
+      ...(effort ? (agent.provider === "openrouter" ? { reasoning: { effort } } : { reasoning_effort: effort as "low" | "medium" | "high" }) : {}),
       model: agent.model,
       messages: [
         ...(system ? [{ role: "system" as const, content: system }] : []),
@@ -288,8 +315,13 @@ async function runOpenAICompatible({ agent, system, messages, signal, onText }: 
   return { text: text.trim() + (finish === "length" ? TRUNCATED : ""), model, usage };
 }
 
-async function runGemini({ agent, system, messages, signal, onText }: RunInput): Promise<RunResult> {
+function runGemini(input: RunInput): Promise<RunResult> {
+  return withEffort(input, (useEffort) => runGeminiOnce(input, useEffort));
+}
+
+async function runGeminiOnce({ agent, system, messages, signal, onText }: RunInput, useEffort: boolean): Promise<RunResult> {
   const ai = new GoogleGenAI({ apiKey: agent.apiKey });
+  const effort = useEffort ? plainEffort(agent.effort) : undefined;
   const stream = await ai.models.generateContentStream({
     model: agent.model,
     contents: messages.map((m) => ({
@@ -298,6 +330,7 @@ async function runGemini({ agent, system, messages, signal, onText }: RunInput):
     })),
     config: {
       ...(system ? { systemInstruction: system } : {}),
+      ...(effort ? { thinkingConfig: { thinkingBudget: GEMINI_BUDGET[effort] } } : {}),
       abortSignal: signal,
       httpOptions: { timeout: REQUEST_TIMEOUT_MS },
     },
@@ -382,8 +415,13 @@ interface PollinationsModel {
 export async function listModels(agent: AgentConfig): Promise<string[]> {
   const { provider, kind } = agent;
   switch (provider) {
-    case "focus":
-      return kind === "image" ? [] : [FOCUS_FREE_MODEL];
+    case "focus": {
+      // the keyless models are listed in the browser; the server adds OpenRouter's free ones when it has a key
+      if (kind !== "chat" || !process.env.FOCUS_OPENROUTER_KEY) return [];
+      const res = await fetch("https://openrouter.ai/api/v1/models", { signal: AbortSignal.timeout(15_000) });
+      const data = (await res.json()) as { data?: { id: string }[] };
+      return (data.data ?? []).filter((m) => m.id.endsWith(":free")).map((m) => `openrouter/${m.id}`);
+    }
     case "anthropic": {
       const client = new Anthropic({ apiKey: agent.apiKey, maxRetries: 1 });
       const ids: string[] = [];

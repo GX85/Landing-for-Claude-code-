@@ -3,7 +3,13 @@ import { fetchModels } from "./api";
 import { h, icon, pageHead } from "./dom";
 import { MODES } from "./modes";
 import {
+  allSkills,
+  avatarOf,
   COLORS,
+  FREE_MODELS,
+  freeModelLabel,
+  uid,
+  type Skill,
   connectionOf,
   KIND_LABEL,
   modelsFor,
@@ -111,6 +117,50 @@ export function renderAgents(main: HTMLElement, ctx: Ctx): void {
       agent.role,
     );
 
+    const serverFree = modelsFor(conn, "chat").filter((m) => m.startsWith("openrouter/"));
+    const freeSelect = h(
+      "div",
+      { class: "inline" },
+      h(
+        "select",
+        { onchange: (e) => update({ model: (e.target as HTMLSelectElement).value }, true) },
+        h("optgroup", { label: "No key, runs in your browser" }, ...FREE_MODELS.map((m) => h("option", { value: m.id, selected: m.id === agent.model }, `${m.label} — ${m.note}`))),
+        serverFree.length
+          ? h("optgroup", { label: "Free via Focus's OpenRouter" }, ...serverFree.map((m) => h("option", { value: m, selected: m === agent.model }, freeModelLabel(m))))
+          : null,
+        agent.model && !FREE_MODELS.some((m) => m.id === agent.model) && !serverFree.includes(agent.model) ? h("option", { value: agent.model, selected: true }, freeModelLabel(agent.model)) : null,
+      ),
+      loadBtn,
+    );
+    const freeHint = serverFree.length
+      ? "The OpenRouter ones (like NVIDIA Nemotron 3 Ultra) run on Focus's server and share its free daily limit."
+      : "“Load models” adds bigger free models such as NVIDIA Nemotron 3 Ultra when this Focus server has an OpenRouter key.";
+
+    const skillChips = h(
+      "span",
+      { class: "presets" },
+      ...allSkills(state).map((sk) =>
+        h(
+          "button",
+          {
+            class: `preset${agent.skills.includes(sk.id) ? " on" : ""}`,
+            type: "button",
+            title: sk.description,
+            "aria-pressed": String(agent.skills.includes(sk.id)),
+            onclick: (e: Event) => {
+              const on = !agent.skills.includes(sk.id);
+              agent.skills = on ? [...agent.skills, sk.id] : agent.skills.filter((x) => x !== sk.id);
+              const btn = e.currentTarget as HTMLElement;
+              btn.classList.toggle("on", on);
+              btn.setAttribute("aria-pressed", String(on));
+              ctx.persist();
+            },
+          },
+          sk.name,
+        ),
+      ),
+    );
+
     const move = (delta: number) => {
       const to = index + delta;
       if (to < 0 || to >= state.agents.length) return;
@@ -124,7 +174,7 @@ export function renderAgents(main: HTMLElement, ctx: Ctx): void {
       h(
         "summary",
         { class: "card-head" },
-        h("span", { class: "avatar", style: `background:${agent.color}` }, agent.name.slice(0, 1)),
+        h("span", { class: "avatar", style: `background:${agent.color}` }, avatarOf(agent)),
         h(
           "span",
           { class: "card-title" },
@@ -132,7 +182,7 @@ export function renderAgents(main: HTMLElement, ctx: Ctx): void {
           h(
             "span",
             { class: "card-sub" },
-            conn ? `${isChat ? "" : `${KIND_LABEL[agent.kind]} · `}${PROVIDERS[conn.provider].label}${agent.model ? ` · ${agent.model}` : ""}` : "No connection",
+            conn ? `${isChat ? "" : `${KIND_LABEL[agent.kind]} · `}${PROVIDERS[conn.provider].label}${agent.model ? ` · ${conn.provider === "focus" ? freeModelLabel(agent.model) : agent.model}` : ""}` : "No connection",
             problem ? h("span", { class: "warn" }, ` · ${problem}`) : "",
           ),
         ),
@@ -180,14 +230,16 @@ export function renderAgents(main: HTMLElement, ctx: Ctx): void {
               agent.kind === "chat" ? null : `${KIND_LABEL[agent.kind]} agents turn the message (or, in Relay, the previous agent's text) into ${agent.kind === "agent" ? "a task" : `a${agent.kind === "image" ? "n image" : " video"}`}.`,
             )
           : null,
-        info?.modelLabel === "—"
+        conn?.provider === "focus" && isChat
+          ? field("Free model", freeSelect, freeHint)
+          : info?.modelLabel === "—"
           ? null
           : field(
               isChat ? "Model" : (info?.modelLabel ?? "Model"),
               h("div", { class: "inline" }, modelInput, conn && !["webhook", "devin"].includes(conn.provider) && !info?.builtIn ? loadBtn : null, models),
               conn?.provider === "anthropic" ? "Default: claude-opus-5-5. Load models to see everything your key can use." : conn?.provider === "openrouter" && isChat ? "Load models: the free ones (ending in :free) come first." : null,
             ),
-        conn?.provider === "anthropic"
+        isChat && conn && !["webhook"].includes(conn.provider)
           ? field(
               "Effort",
               h(
@@ -195,9 +247,10 @@ export function renderAgents(main: HTMLElement, ctx: Ctx): void {
                 { onchange: (e) => update({ effort: (e.target as HTMLSelectElement).value as Effort }) },
                 ...(["", "low", "medium", "high", "xhigh", "max"] as Effort[]).map((v) => h("option", { value: v, selected: v === agent.effort }, v || "model default")),
               ),
-              "Higher effort thinks longer and costs more.",
+              EFFORT_HINT[conn.provider] ?? "How hard the model thinks before answering. Models without a thinking setting ignore it.",
             )
           : null,
+        isChat ? field("Skills", skillChips, h("span", {}, "Extra instructions this agent always follows. ", h("a", { href: "#skills" }, "Write your own"), ".")) : null,
         !isChat
           ? null
           : field(
@@ -225,7 +278,16 @@ export function renderAgents(main: HTMLElement, ctx: Ctx): void {
         h(
           "div",
           { class: "field" },
-          h("span", { class: "field-label" }, "Color"),
+          h("span", { class: "field-label" }, "Avatar and color"),
+          h("input", {
+            class: "avatar-input",
+            value: agent.avatar,
+            maxlength: 4,
+            placeholder: agent.name.slice(0, 1) || "A",
+            "aria-label": "Avatar: one or two letters or an emoji",
+            oninput: (e) => update({ avatar: (e.target as HTMLInputElement).value.trim() }),
+            onchange: () => rerender(),
+          }),
           h(
             "div",
             { class: "swatches" },
@@ -283,9 +345,27 @@ export function renderAgents(main: HTMLElement, ctx: Ctx): void {
 
   listEl.append(...state.agents.map(card));
 
+  const addCustom = () => {
+    const conn = state.connections.find((c) => c.provider === "focus") ?? state.connections.find((c) => PROVIDERS[c.provider].kinds.includes("chat"));
+    if (!conn) return ctx.go({ name: "connections" });
+    const agent = newAgent(conn, "chat");
+    agent.name = `Agent ${state.agents.length + 1}`;
+    agent.color = COLORS[state.agents.length % COLORS.length];
+    state.agents.push(agent);
+    state.config.agentIds.push(agent.id);
+    openAgents.add(agent.id);
+    rerender();
+    requestAnimationFrame(() => {
+      const card = main.querySelector<HTMLElement>(".agent-card:last-of-type");
+      card?.scrollIntoView({ behavior: "smooth", block: "center" });
+      card?.querySelector<HTMLInputElement>(".card-body input")?.select();
+    });
+  };
+
   const addMenu = h(
     "div",
     { class: "add-row" },
+    h("button", { class: "btn sm", type: "button", onclick: addCustom }, icon("plus", 14), "Custom agent"),
     ...state.connections.flatMap((c) =>
       PROVIDERS[c.provider].kinds.map((kind) => {
         const base = ["custom", "webhook"].includes(c.provider) ? c.name : PROVIDERS[c.provider].agentName;
@@ -317,9 +397,103 @@ export function renderAgents(main: HTMLElement, ctx: Ctx): void {
     "Your team. Each agent is a model with a name and a role; you can have several agents on the same model, like a writer and a critic. The order here is the order in Relay.",
     listEl,
     h("h2", { class: "section-title" }, "Add an agent"),
+    h("p", { class: "section-lede" }, "Start from scratch with a custom agent — give it any name, avatar, role, skills and model — or start from a connection below."),
     addMenu,
+    h("h2", { class: "section-title", id: "skills" }, "Skills"),
+    h("p", { class: "section-lede" }, "A skill is a set of instructions you can give to any chat agent: open an agent and tap a skill to turn it on. Focus comes with ten; write your own here."),
+    skillsSection(ctx, rerender),
   );
 }
+
+const openSkills = new Set<string>();
+
+function skillsSection(ctx: Ctx, rerender: () => void): HTMLElement {
+  const { state } = ctx;
+  const card = (sk: Skill): HTMLElement => {
+    const users = state.agents.filter((a) => a.skills.includes(sk.id)).map((a) => a.name);
+    const sub = `${sk.builtIn ? "Built in" : "Yours"}${users.length ? ` · used by ${users.join(", ")}` : ""}`;
+    if (sk.builtIn)
+      return h(
+        "details",
+        { class: "card skill-card" },
+        h("summary", { class: "card-head" }, h("span", { class: "card-title" }, h("span", { class: "card-name" }, sk.name), h("span", { class: "card-sub" }, `${sk.description} · ${sub}`)), icon("chevron", 16)),
+        h("div", { class: "card-body" }, h("p", { class: "skill-text" }, sk.instructions)),
+      );
+    const update = (patch: Partial<Skill>) => {
+      Object.assign(sk, patch);
+      ctx.persist();
+    };
+    const el = h(
+      "details",
+      { class: "card skill-card", open: openSkills.has(sk.id) },
+      h("summary", { class: "card-head" }, h("span", { class: "card-title" }, h("span", { class: "card-name" }, sk.name || "Untitled skill"), h("span", { class: "card-sub" }, sub)), icon("chevron", 16)),
+      h(
+        "div",
+        { class: "card-body" },
+        field("Name", h("input", { value: sk.name, oninput: (e) => update({ name: (e.target as HTMLInputElement).value }), onchange: rerender })),
+        field("Short description", h("input", { value: sk.description, placeholder: "Shown when you hover the skill", oninput: (e) => update({ description: (e.target as HTMLInputElement).value }) })),
+        field(
+          "Instructions",
+          h("textarea", { rows: 4, placeholder: "What the agent should always do when it has this skill.", oninput: (e) => update({ instructions: (e.target as HTMLTextAreaElement).value }) }, sk.instructions),
+        ),
+        h(
+          "div",
+          { class: "card-actions" },
+          h("span", { class: "spacer" }),
+          h(
+            "button",
+            {
+              class: "btn-ghost sm danger",
+              type: "button",
+              onclick: () => {
+                if (!confirm(`Remove the skill “${sk.name}”?`)) return;
+                state.skills = state.skills.filter((x) => x !== sk);
+                for (const a of state.agents) a.skills = a.skills.filter((x) => x !== sk.id);
+                rerender();
+              },
+            },
+            "Remove",
+          ),
+        ),
+      ),
+    );
+    el.addEventListener("toggle", () => (el.open ? openSkills.add(sk.id) : openSkills.delete(sk.id)));
+    return el;
+  };
+  return h(
+    "div",
+    {},
+    h("div", { class: "cards" }, ...[...state.skills, ...allSkills({}).filter((x) => x.builtIn)].map(card)),
+    h(
+      "div",
+      { class: "add-row" },
+      h(
+        "button",
+        {
+          class: "btn-ghost sm",
+          type: "button",
+          onclick: () => {
+            const sk: Skill = { id: `sk-${uid()}`, name: "New skill", description: "", instructions: "" };
+            state.skills.push(sk);
+            openSkills.add(sk.id);
+            rerender();
+          },
+        },
+        icon("plus", 14),
+        "New skill",
+      ),
+    ),
+  );
+}
+
+const EFFORT_HINT: Partial<Record<Provider, string>> = {
+  anthropic: "Higher effort thinks longer and costs more.",
+  openai: "Sent as reasoning effort to reasoning models (o-series, GPT-5); others ignore it.",
+  xai: "Sent as reasoning effort; Grok models that can't use it ignore it.",
+  openrouter: "Sent as reasoning effort to models that support thinking.",
+  gemini: "Sets the thinking budget for Gemini 2.5 and newer.",
+  focus: "Free models mostly ignore it; it matters for the OpenRouter ones that can think.",
+};
 
 /* ---------- connections ---------- */
 

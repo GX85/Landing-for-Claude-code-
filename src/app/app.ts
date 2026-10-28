@@ -1,3 +1,4 @@
+import { signedInUser, signOut } from "./signin";
 import "./app.css";
 import type { Route } from "../router";
 import { renderChat, isRunning } from "./chat";
@@ -140,6 +141,7 @@ function renderSidebar(): void {
   );
   renderChats();
   const ready = state.agents.filter((a) => isReady(state, a)).length;
+  const user = signedInUser();
   footEl.replaceChildren(
     h(
       "a",
@@ -155,6 +157,15 @@ function renderSidebar(): void {
       h("span", { class: "status-dot" }),
       ready ? `${ready} agent${ready === 1 ? "" : "s"} ready` : "Add an API key to start",
     ),
+    ...(user
+      ? [h(
+          "div",
+          { class: "side-user" },
+          user.avatar ? h("img", { src: user.avatar, alt: "", width: 22, height: 22 }) : h("span", { class: "avatar xs", style: "background:#1d1d1d" }, user.name.slice(0, 1).toUpperCase()),
+          h("span", { class: "side-user-name", title: user.email ?? user.name }, user.name),
+          h("button", { class: "btn-ghost sm", type: "button", onclick: () => void signOut() }, "Sign out"),
+        )]
+      : []),
   );
 }
 

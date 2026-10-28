@@ -7,7 +7,7 @@ function devApi(): Plugin {
     name: "focus-dev-api",
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
-        const match = req.url?.match(/^\/api\/(run|models|job|media)(\?.*)?$/);
+        const match = req.url?.match(/^\/api\/(run|models|job|media|auth)(\?.*)?$/);
         if (!match) return next();
         const abort = new AbortController();
         res.on("close", () => abort.abort());
@@ -22,7 +22,9 @@ function devApi(): Plugin {
           } as RequestInit);
           const response: Response = await mod.default.fetch(request);
           res.statusCode = response.status;
-          response.headers.forEach((value, key) => res.setHeader(key, value));
+          response.headers.forEach((value, key) => key !== "set-cookie" && res.setHeader(key, value));
+          const setCookies = response.headers.getSetCookie();
+          if (setCookies.length) res.setHeader("set-cookie", setCookies);
           res.flushHeaders();
           if (response.body) {
             for await (const chunk of response.body as unknown as AsyncIterable<Uint8Array>) res.write(chunk);

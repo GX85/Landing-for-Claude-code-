@@ -1,5 +1,6 @@
 import { callAgent, runJob, type ChatTurn, type ImagePart } from "./api";
-import type { Agent, Connection, ModeId, StepRecord } from "./store";
+import { typingTick } from "./sound";
+import type { Agent, Connection, ModeId, Skill, StepRecord } from "./store";
 
 export interface ModeInfo {
   id: ModeId;
@@ -111,6 +112,8 @@ export interface RunContext {
   lead: Agent;
   rounds: number;
   connectionOf: (agent: Agent) => Connection;
+  /** Every skill an agent could have, built-in and the user's own. */
+  skills: Skill[];
   signal: AbortSignal;
   /** Called whenever a step starts, streams or ends. */
   onChange: () => void;
@@ -140,6 +143,7 @@ class Run {
         : `You are ${agent.name}, an AI assistant in Focus.`,
       "Reply with your result only, without meta commentary about the team. Use Markdown when it helps readability.",
       agent.role.trim() ? `Your role: ${agent.role.trim()}` : "",
+      ...this.ctx.skills.filter((s) => agent.skills?.includes(s.id) && s.instructions.trim()).map((s) => `Skill — ${s.name}: ${s.instructions.trim()}`),
     ]
       .filter(Boolean)
       .join("\n");
@@ -151,6 +155,7 @@ class Run {
       id: this.nextId++,
       agentId: agent.id,
       agentName: agent.name,
+      avatar: agent.avatar,
       color: agent.color,
       phase,
       status: "running",
@@ -170,6 +175,7 @@ class Run {
               [...this.ctx.history, { role: "user", content: prompt, ...(images.length ? { images } : {}) }],
               this.ctx.signal,
               (text) => {
+                if (text.length > step.text.length) typingTick();
                 step.text = text;
                 this.ctx.onChange();
               },

@@ -90,20 +90,6 @@ body {
   pointer-events: none;
 }
 
-.lines {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-}
-
-.lines path {
-  fill: none;
-  stroke: #ffffff;
-  stroke-linecap: round;
-  vector-effect: non-scaling-stroke;
-}
-
 /* ---------- nav ---------- */
 
 .nav {
