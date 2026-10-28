@@ -135,6 +135,28 @@ let userConnections: Connection[] = [];
 /** Lets Focus agents borrow the user's own OpenRouter key for OpenRouter models. */
 export const setConnections = (list: Connection[]) => (userConnections = list);
 
+type Sample = ((input: string | { role: string; content: string }[], opts?: { onText?: (e: { text: string }) => void; signal?: AbortSignal; cache?: boolean }) => Promise<{ text: string }>) | null;
+let samplePromise: Promise<Sample> | undefined;
+
+/** Inside a Claude Artifact there is no Focus server, so every chat agent answers through Claude. */
+async function callInArtifact(agent: Agent, system: string, messages: ChatTurn[], signal: AbortSignal, onText: (full: string) => void): Promise<CallResult> {
+  const claude = (window as unknown as { claude?: { use: (n: string) => Promise<Sample> } }).claude;
+  samplePromise ??= claude ? claude.use("sample") : Promise.resolve(null);
+  const sample = await samplePromise;
+  if (!sample) throw new Error("Claude isn't available in this view. Open the artifact on claude.ai while signed in.");
+  const turns = messages.map((m, i) => ({
+    role: m.role,
+    content: `${i === 0 ? `${system}\n\n---\n\n` : ""}${m.content}${m.images?.length ? "\n\n[An image was attached.]" : ""}`,
+  }));
+  try {
+    const r = await sample(turns, { onText: (e) => onText(e.text), signal, cache: false });
+    return { text: r.text.trim(), model: `Claude · as ${agent.name}` };
+  } catch (error) {
+    const e = error as { code?: string; message?: string };
+    throw new Error(e.code === "not_granted" ? "Allow this page to ask Claude to chat here." : e.code === "rate_limited" ? "Claude is rate limited right now. Try again in a minute." : e.message || "Claude couldn't answer.");
+  }
+}
+
 /** Calls one chat agent and streams its text into `onText`. */
 export async function callAgent(
   agent: Agent,
@@ -144,6 +166,7 @@ export async function callAgent(
   signal: AbortSignal,
   onText: (full: string) => void,
 ): Promise<CallResult> {
+  if (import.meta.env.VITE_ARTIFACT === "1") return callInArtifact(agent, system, messages, signal, onText);
   if (conn.provider === "ollama") return callOllama(agent, conn, system, messages, signal, onText);
   if (conn.provider === "focus" && agent.model.startsWith("openrouter/")) {
     const own = userConnections.find((c) => c.provider === "openrouter" && c.apiKey);

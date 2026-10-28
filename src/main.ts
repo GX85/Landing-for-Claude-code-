@@ -9,7 +9,14 @@ const loadApp = () => import("./app/app");
 /** Switches between the landing and the app without reloading the page. */
 export async function navigate(to: Route | string, { replace = false } = {}): Promise<void> {
   const path = typeof to === "string" ? to : routePath(to);
-  if (path !== location.pathname) history[replace ? "replaceState" : "pushState"](null, "", path);
+  if (path !== currentPath()) {
+    if (ARTIFACT) {
+      artifactPath = path;
+      // only a plain #name survives in an artifact's address
+      const name = path.replace(/^\/app\/?/, "").split("/")[0] || (path.startsWith("/app") ? "app" : "");
+      history.replaceState(null, "", name ? `#${name}` : location.pathname);
+    } else history[replace ? "replaceState" : "pushState"](null, "", path);
+  }
   await apply(parseRoute(path));
 }
 
@@ -51,14 +58,20 @@ async function apply(route: Route): Promise<void> {
   app.show(appRoot, route, (to, opts) => void navigate(to, opts));
 }
 
-addEventListener("popstate", () => void apply(parseRoute(location.pathname)));
+/** Built as a Claude Artifact: no server, no path routing. */
+const ARTIFACT = import.meta.env.VITE_ARTIFACT === "1";
+const HASH_ROUTES: Record<string, string> = { app: "/app", agents: "/app/agents", connections: "/app/connections", modes: "/app/modes" };
+let artifactPath = HASH_ROUTES[location.hash.slice(1)] ?? "/";
+const currentPath = () => (ARTIFACT ? artifactPath : location.pathname);
+
+addEventListener("popstate", () => void apply(parseRoute(currentPath())));
 // the landing manages its own scroll position
 history.scrollRestoration = "manual";
 
-void apply(parseRoute(location.pathname));
+void apply(parseRoute(currentPath()));
 
 // warm the app bundle while the landing plays
-if (parseRoute(location.pathname).name === "landing") {
+if (parseRoute(currentPath()).name === "landing") {
   const idle = window.requestIdleCallback ?? ((cb: () => void) => setTimeout(cb, 1500));
   idle(() => void loadApp());
 }
