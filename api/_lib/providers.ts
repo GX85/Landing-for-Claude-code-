@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { ApiError as GeminiApiError, GoogleGenAI } from "@google/genai";
 import { listJobModels } from "./jobs.js";
+import { GENERATORS, type Generator } from "./generators.js";
 
 export type Provider =
   | "focus"
@@ -17,9 +18,11 @@ export type Provider =
   | "replicate"
   | "manus"
   | "jules"
-  | "devin";
+  | "devin"
+  | Generator;
 
 export const PROVIDERS: readonly Provider[] = [
+  ...GENERATORS,
   "focus",
   "anthropic",
   "openai",
@@ -136,7 +139,8 @@ const imageNote = (m: ChatMessage) => (m.images?.length ? `\n\n[${m.images.lengt
 async function runFocus(input: RunInput): Promise<RunResult> {
   if (input.agent.model.startsWith("openrouter/")) {
     const orKey = process.env.FOCUS_OPENROUTER_KEY;
-    if (!orKey) throw new UserError("This free model needs Focus's OpenRouter key on the server (FOCUS_OPENROUTER_KEY). Pick another free model.", 503);
+    if (!input.agent.model.endsWith(":free")) throw new UserError("Only free OpenRouter models run on Focus's key. Add your own OpenRouter key in Connections for the others.", 403);
+    if (!orKey) throw new UserError("This free model needs Focus's OpenRouter key on the server (FOCUS_OPENROUTER_KEY). Add your own free OpenRouter key in Connections, or pick a model from the “No key” group.", 503);
     return runOpenAICompatible({ ...input, agent: { ...input.agent, provider: "openrouter", apiKey: orKey, model: input.agent.model.slice("openrouter/".length) } });
   }
   const key = process.env.FOCUS_POLLINATIONS_KEY;

@@ -4,6 +4,7 @@ import "@fontsource/pixelify-sans/latin-700.css";
 import "@fontsource/instrument-serif/latin-400.css";
 import "./sections.css";
 import "./dark.css";
+import { themeButton } from "./theme";
 
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -173,6 +174,53 @@ function setupGlassLight(): void {
     const r = el.getBoundingClientRect();
     el.style.setProperty("--mx", `${(((e.clientX - r.left) / r.width) * 100).toFixed(1)}%`);
     el.style.setProperty("--my", `${(((e.clientY - r.top) / r.height) * 100).toFixed(1)}%`);
+  });
+}
+
+/* ---------- click parallax ---------- */
+
+/**
+ * Tap anywhere on the background and the scene leans toward the tap: the cell
+ * floor, the fog and the colour orbs each move by their own depth and then
+ * spring back, while a ring of light runs out across the cells.
+ */
+function setupParallax(): void {
+  if (reducedMotion) return;
+  const paper = root.querySelector<HTMLElement>(".paper")!;
+  const layers: [HTMLElement, number][] = [
+    ...[...root.querySelectorAll<HTMLElement>(".cells, .cells-lit")].map((el) => [el, 0.035] as [HTMLElement, number]),
+    ...[...root.querySelectorAll<HTMLElement>(".fog i")].map((el, i) => [el, 0.07 + i * 0.05] as [HTMLElement, number]),
+    ...[...root.querySelectorAll<HTMLElement>(".ambient")].map((el) => [el, 0.12] as [HTMLElement, number]),
+    ...[...root.querySelectorAll<HTMLElement>(".hero .word")].map((el) => [el, -0.018] as [HTMLElement, number]),
+  ];
+  // the fog already drifts with a transform, so it moves through `translate` instead
+  const prop = (el: HTMLElement) => (el.parentElement?.classList.contains("fog") || el.classList.contains("word") ? "translate" : "transform");
+
+  root.addEventListener("pointerdown", (e) => {
+    const target = e.target as Element;
+    if (e.button !== 0 || target.closest("a, button, input, textarea, select, summary, video, .glass, .tile, .mode-stage, .mode-tabs, .qa, .pill")) return;
+    const dx = e.clientX - innerWidth / 2;
+    const dy = e.clientY - innerHeight / 2;
+    for (const [el, depth] of layers) {
+      const x = dx * depth;
+      const y = dy * depth;
+      const p = prop(el);
+      const at = (k: number) => (p === "translate" ? { translate: `${x * k}px ${y * k}px` } : { transform: `translate3d(${x * k}px, ${y * k}px, 0)` });
+      el.animate([at(0), at(1), at(-0.28), at(0.1), at(0)], { duration: 1400, easing: "cubic-bezier(0.22, 1, 0.36, 1)", composite: "add" });
+    }
+    // a ring of light that runs out across the cells
+    const ring = document.createElement("i");
+    ring.className = "tap-ring";
+    ring.style.left = `${e.clientX}px`;
+    ring.style.top = `${e.clientY}px`;
+    paper.append(ring);
+    ring.animate(
+      [
+        { transform: "translate(-50%, -50%) scale(0.05)", opacity: 0.9 },
+        { transform: "translate(-50%, -50%) scale(1)", opacity: 0 },
+      ],
+      { duration: 1100, easing: "cubic-bezier(0.2, 0.7, 0.2, 1)" },
+    ).onfinish = () => ring.remove();
   });
 }
 
@@ -539,6 +587,8 @@ export function initSections(el: HTMLElement): void {
   statement = root.querySelector("[data-words]");
   words = setupStatement();
   if (reducedMotion) words.forEach((w) => w.classList.add("lit"));
+  root.querySelector("[data-theme-slot]")?.replaceWith(themeButton("nav-theme"));
+  setupParallax();
   setupReveal();
   setupCounters();
   setupMarquee();

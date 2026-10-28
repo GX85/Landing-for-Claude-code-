@@ -1,4 +1,5 @@
 import { GenerateVideosOperation, GoogleGenAI } from "@google/genai";
+import { GENERATOR_MODELS, isGenerator, pollGenerator, startGenerator } from "./generators.js";
 import { openAIClient, UserError, type AgentConfig, type ImagePart } from "./providers.js";
 
 /**
@@ -196,6 +197,7 @@ function julesSource(model: string): { source: string; branch: string } {
 const devinId = (id: string) => (id.startsWith("devin-") ? id : `devin-${id}`);
 
 async function startExternal(agent: AgentConfig, text: string, images: ImagePart[]): Promise<JobResult> {
+  if (isGenerator(agent.provider)) return startGenerator(agent, text, images);
   const key = agent.apiKey;
   switch (agent.provider) {
     case "luma": {
@@ -262,6 +264,7 @@ async function startExternal(agent: AgentConfig, text: string, images: ImagePart
 }
 
 async function pollExternal(agent: AgentConfig, job: JobState): Promise<JobResult> {
+  if (isGenerator(agent.provider)) return pollGenerator(agent, job);
   const key = agent.apiKey;
   switch (agent.provider) {
     case "luma": {
@@ -351,6 +354,7 @@ async function pollExternal(agent: AgentConfig, job: JobState): Promise<JobResul
 
 /** Suggestions for the model field of media and agent connections. */
 export async function listJobModels(agent: AgentConfig): Promise<string[]> {
+  if (isGenerator(agent.provider)) return GENERATOR_MODELS[agent.provider][agent.kind === "video" ? "video" : "image"] ?? [];
   switch (agent.provider) {
     case "luma":
       return ["ray-2", "ray-flash-2"];

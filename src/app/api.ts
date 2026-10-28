@@ -131,6 +131,10 @@ async function callFree(model: string, system: string, messages: ChatTurn[], sig
   }
 }
 
+let userConnections: Connection[] = [];
+/** Lets Focus agents borrow the user's own OpenRouter key for OpenRouter models. */
+export const setConnections = (list: Connection[]) => (userConnections = list);
+
 /** Calls one chat agent and streams its text into `onText`. */
 export async function callAgent(
   agent: Agent,
@@ -141,6 +145,10 @@ export async function callAgent(
   onText: (full: string) => void,
 ): Promise<CallResult> {
   if (conn.provider === "ollama") return callOllama(agent, conn, system, messages, signal, onText);
+  if (conn.provider === "focus" && agent.model.startsWith("openrouter/")) {
+    const own = userConnections.find((c) => c.provider === "openrouter" && c.apiKey);
+    if (own) return callAgent({ ...agent, model: agent.model.slice("openrouter/".length) }, own, system, messages, signal, onText);
+  }
   if (conn.provider === "focus" && agent.kind === "chat" && /^(llm7|pollinations)\//.test(agent.model)) return callFree(agent.model, system, messages, signal, onText);
 
   const res = await fetch("/api/run", {

@@ -2022,3 +2022,133 @@ details[open] > .card-head > svg:last-child {
 .side-user { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 13px; }
 .side-user img { border-radius: 50%; }
 .side-user-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ======================================================================
+   Dark theme for the app
+   ====================================================================== */
+
+html.dark .app-root {
+  color-scheme: dark;
+  --bg: #0b0b0d;
+  --side: #121215;
+  --card: #18181c;
+  --ink: #f4f4f2;
+  --ink-2: #d1d1d6;
+  --ink-3: #98989f;
+  --ink-4: #636369;
+  --line: rgba(255, 255, 255, 0.09);
+  --hover: rgba(255, 255, 255, 0.06);
+  --press: rgba(255, 255, 255, 0.1);
+  --bubble: #232328;
+  --field: #1c1c21;
+  --btn: #f4f4f2;
+  --ok: #30d158;
+  --warn: #ff9f0a;
+  --err: #ff453a;
+  --focus-ring: #4da3ff;
+  --glass-bg:
+    radial-gradient(120% 85% at var(--mx, 25%) var(--my, 0%), rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0) 60%),
+    linear-gradient(160deg, rgba(30, 30, 36, 0.78), rgba(18, 18, 22, 0.66));
+  --glass-rim: inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --glass-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 18px 40px -20px rgba(0, 0, 0, 0.9);
+  --scroll-edge: #0b0b0d;
+}
+
+html.dark .app-root::before {
+  opacity: 0.22;
+}
+
+html.dark .app-root .side-search,
+html.dark .app-root .chat-item.active,
+html.dark .app-root .chip-btn:hover,
+html.dark .app-root .suggestion,
+html.dark .app-root .side-foot {
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+html.dark .app-root .suggestion:hover {
+  background: rgba(255, 255, 255, 0.09);
+}
+
+html.dark .app-root .composer,
+html.dark .app-root .composer:focus-within {
+  background: rgba(26, 26, 31, 0.85);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 0 1px rgba(255, 255, 255, 0.07), 0 16px 34px -20px #000;
+}
+
+html.dark .app-root .popover {
+  background: rgba(24, 24, 29, 0.92);
+}
+
+html.dark .app-root .bubble {
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+html.dark .app-root .card,
+html.dark .app-root .field input,
+html.dark .app-root .field select,
+html.dark .app-root .field textarea {
+  color: var(--ink);
+}
+
+html.dark .app-root .send-btn,
+html.dark .app-root .btn,
+html.dark .app-root .preset.on {
+  color: #0b0b0c;
+}
+
+html.dark .app-root .preset {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+html.dark .app-root .main-head::before {
+  opacity: 0.9;
+}
+
+.app-root .theme-toggle {
+  color: var(--ink-3);
+  margin: 0;
+}
+
+html.dark .app-root .main-head {
+  background: linear-gradient(to bottom, rgba(11, 11, 13, 0.96) 45%, rgba(11, 11, 13, 0));
+}
+
+html.dark .app-root .composer-dock::before {
+  background: linear-gradient(to top, rgba(11, 11, 13, 0.92) 30%, rgba(11, 11, 13, 0));
+}
+
+html.dark .app-root .step {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+html.dark .app-root .head-left .icon-btn,
+html.dark .app-root .chip-btn {
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+html.dark .app-root .chip-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+html.dark .app-root .popover {
+  background:
+    radial-gradient(120% 85% at var(--mx, 25%) var(--my, 0%), rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0) 60%),
+    linear-gradient(160deg, rgba(30, 30, 36, 0.92), rgba(20, 20, 24, 0.88));
+}
+
+html.dark .app-root .process,
+html.dark .app-root .compare-card,
+html.dark .app-root .card {
+  background: rgba(24, 24, 29, 0.78);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 0 0 1px rgba(255, 255, 255, 0.06), 0 12px 30px -22px #000;
+}
+
+html.dark .app-root .side-link.active,
+html.dark .app-root .chat-item.active {
+  background: rgba(255, 255, 255, 0.09);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}

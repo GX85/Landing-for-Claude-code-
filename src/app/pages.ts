@@ -49,6 +49,33 @@ function toggle(checked: boolean, label: string, onChange: (on: boolean) => void
 
 /* ---------- agents ---------- */
 
+interface OrModel {
+  id: string;
+  name: string;
+  free: boolean;
+}
+let orModels: OrModel[] | undefined;
+let orLoading = false;
+
+/** OpenRouter's public model list, loaded once; the page re-renders when it arrives. */
+function openRouterCatalog(onLoad: () => void): OrModel[] {
+  if (orModels) return orModels;
+  if (!orLoading) {
+    orLoading = true;
+    fetch("https://openrouter.ai/api/v1/models")
+      .then((r) => r.json())
+      .then((d: { data: { id: string; name: string; architecture?: { output_modalities?: string[] } }[] }) => {
+        orModels = d.data
+          .filter((m) => !m.architecture?.output_modalities || m.architecture.output_modalities.includes("text"))
+          .map((m) => ({ id: `openrouter/${m.id}`, name: m.name.replace(/\s*\(free\)$/i, ""), free: m.id.endsWith(":free") }))
+          .sort((a, b) => a.name.localeCompare(b.name));
+        onLoad();
+      })
+      .catch(() => (orLoading = false));
+  }
+  return [];
+}
+
 const openAgents = new Set<string>();
 
 export function renderAgents(main: HTMLElement, ctx: Ctx): void {
@@ -117,24 +144,23 @@ export function renderAgents(main: HTMLElement, ctx: Ctx): void {
       agent.role,
     );
 
-    const serverFree = modelsFor(conn, "chat").filter((m) => m.startsWith("openrouter/"));
+    const userOr = state.connections.find((c) => c.provider === "openrouter" && c.apiKey);
+    const catalog = openRouterCatalog(() => renderAgents(main, ctx));
+    const freeOr = catalog.filter((m) => m.free);
+    const paidOr = userOr ? catalog.filter((m) => !m.free) : [];
+    const known = new Set([...FREE_MODELS.map((m) => m.id), ...catalog.map((m) => m.id)]);
+    const opt = (id: string, label: string) => h("option", { value: id, selected: id === agent.model }, label);
     const freeSelect = h(
-      "div",
-      { class: "inline" },
-      h(
-        "select",
-        { onchange: (e) => update({ model: (e.target as HTMLSelectElement).value }, true) },
-        h("optgroup", { label: "No key, runs in your browser" }, ...FREE_MODELS.map((m) => h("option", { value: m.id, selected: m.id === agent.model }, `${m.label} — ${m.note}`))),
-        serverFree.length
-          ? h("optgroup", { label: "Free via Focus's OpenRouter" }, ...serverFree.map((m) => h("option", { value: m, selected: m === agent.model }, freeModelLabel(m))))
-          : null,
-        agent.model && !FREE_MODELS.some((m) => m.id === agent.model) && !serverFree.includes(agent.model) ? h("option", { value: agent.model, selected: true }, freeModelLabel(agent.model)) : null,
-      ),
-      loadBtn,
+      "select",
+      { onchange: (e) => update({ model: (e.target as HTMLSelectElement).value }, true) },
+      h("optgroup", { label: "No key · runs in your browser" }, ...FREE_MODELS.map((m) => opt(m.id, `${m.label} — ${m.note}`))),
+      freeOr.length ? h("optgroup", { label: `Free on OpenRouter · ${freeOr.length} models` }, ...freeOr.map((m) => opt(m.id, m.name))) : null,
+      paidOr.length ? h("optgroup", { label: `All OpenRouter models · ${paidOr.length} · billed to your key` }, ...paidOr.map((m) => opt(m.id, m.name))) : null,
+      agent.model && !known.has(agent.model) ? opt(agent.model, freeModelLabel(agent.model)) : null,
     );
-    const freeHint = serverFree.length
-      ? "The OpenRouter ones (like NVIDIA Nemotron 3 Ultra) run on Focus's server and share its free daily limit."
-      : "“Load models” adds bigger free models such as NVIDIA Nemotron 3 Ultra when this Focus server has an OpenRouter key.";
+    const freeHint = userOr
+      ? `${catalog.length || "All"} OpenRouter models are listed. The free ones cost nothing; others are billed to your OpenRouter key.`
+      : h("span", {}, "OpenRouter has about 460 models, but only the ones marked free cost nothing. Free OpenRouter models use Focus's server key when it has one, or ", h("a", { href: "/app/connections" }, "add your own free OpenRouter key"), " to unlock all of them.");
 
     const skillChips = h(
       "span",

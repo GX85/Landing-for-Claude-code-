@@ -3,7 +3,7 @@ import type { ChatTurn } from "./api";
 import { h, icon, pageHead, seconds } from "./dom";
 import { renderMarkdown } from "./markdown";
 import { ACCEPT, dataUrlOf, readAttachment } from "./attachments";
-import { resolveMedia, type ImagePart } from "./api";
+import { resolveMedia, setConnections, type ImagePart } from "./api";
 import { modeInfo, MODES, startRun } from "./modes";
 import { click, setSound } from "./sound";
 import { allSkills, avatarOf, connectionOf, isReady, KIND_LABEL, missing, PROVIDERS, uid, type Agent, type Attachment, type Chat, type ChatConfig, type Message, type StepRecord } from "./store";
@@ -36,6 +36,7 @@ let view: { chatId?: string; list: HTMLElement; scroller: HTMLElement; ctx: Ctx 
 
 export function renderChat(main: HTMLElement, ctx: Ctx, chat: Chat | undefined): void {
   connectionsRef = ctx.state.connections;
+  setConnections(ctx.state.connections);
   const config = chat?.config ?? (draft = structuredClone(ctx.state.config));
   const list = h("div", { class: "thread" });
   const scroller = h("div", { class: "chat-scroll" }, list);

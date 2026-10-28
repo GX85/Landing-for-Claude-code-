@@ -22,6 +22,9 @@
       as="image"
       href="https://d2ol7oe51mr4n9.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/726b168c-da47-4682-a255-cc3e02f89bae.jpg"
     />
+    <script>
+      try { document.documentElement.classList.add(localStorage.getItem("focus.theme") === "light" ? "light" : "dark"); } catch { document.documentElement.classList.add("dark"); }
+    </script>
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
@@ -41,6 +44,7 @@
           <a href="#faq" data-scroll>FAQ</a>
         </nav>
         <nav class="nav-group nav-social" aria-label="More">
+          <span class="nav-theme" data-theme-slot></span>
           <a class="nav-github" href="https://github.com/GX85/Landing-for-Claude-code-">GitHub</a>
           <a class="nav-app" href="/app" data-route>Open app</a>
         </nav>
