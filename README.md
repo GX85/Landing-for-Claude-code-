@@ -1,6 +1,9 @@
 # Focus — hero
 
-One-screen hero for **Focus**, a harness for agents. Vite + TypeScript, vanilla JS, no framework.
+One-screen landing for **Focus** — a harness that puts different models and agents to work together:
+Claude, GPT, Gemini and Grok side by side, plus video generators and autonomous agents such as Manus or Jules.
+
+Vite + TypeScript, vanilla JS, no framework.
 
 ```bash
 npm install
