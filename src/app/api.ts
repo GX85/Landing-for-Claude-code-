@@ -547,7 +547,17 @@ async function focusClip(agent: Agent, conn: Connection, prompt: string, signal:
   const models = [...new Set([...tierModels("clorus"), ...tierModels("gen")])];
   const call: BuildCall = (sys, msgs, cb, maxTokens) =>
     chainCall(models, { ...agent, kind: "chat", effort: "high" }, conn, sys, msgs, signal, cb, { maxTokens, firstTokenMs: 60000, totalMs: 300000 });
-  const text = await runBuild("clip", [{ role: "user", content: prompt }], call, (full) => onProgress(full.split("\n")[0].replace(/^\*|\*$/g, "")), signal);
+  let text = "";
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      onProgress(attempt ? "The free models were busy, trying again…" : "Writing the film…");
+      text = await runBuild("clip", [{ role: "user", content: prompt }], call, (full) => onProgress(full.split("\n")[0].replace(/^\*|\*$/g, "")), signal);
+      break;
+    } catch (error) {
+      if (signal.aborted) throw error;
+      if (attempt) throw new Error("Focus Video couldn't finish: the free models are busy right now. Try again in a minute. (Focus makes an animated film for free; a realistic video needs a paid generator such as Higgsfield, Luma or Veo, added under Connections.)");
+    }
+  }
   return { text, model: "Focus Video · animated clip" };
 }
 

@@ -2,7 +2,7 @@ import type { Ctx } from "./app";
 import type { ChatTurn } from "./api";
 import { h, icon, pageHead, seconds } from "./dom";
 import { renderMarkdown, renderMarkdownStreaming } from "./markdown";
-import { ACCEPT, dataUrlOf, readAttachment } from "./attachments";
+import { ACCEPT, dataUrlOf, readAttachments } from "./attachments";
 import { generateGreeting, resolveMedia, setConnections, type ImagePart } from "./api";
 import { modeInfo, MODES, startRun } from "./modes";
 import { click, setSound } from "./sound";
@@ -10,6 +10,7 @@ import { agentAvatar, applyHub, focusMark } from "./brand";
 import { agentMascot } from "../mascot";
 import { setToolsConfig } from "./tools";
 import { typeInto as handWrite, typePlaceholder } from "./typing";
+import { getLang, tr } from "../i18n";
 import { allSkills, choiceModel, connectionOf, isReady, KIND_LABEL, missing, newConnection, PERSONA, PROVIDERS, TIER_ORDER, TIERS, uid, type Agent, type Attachment, type Chat, type ChatConfig, type CreateKind, type FocusAgent, type Hub, type Message, type StepRecord, type Tier } from "./store";
 
 const SCENE_VIDEO = "https://d2ol7oe51mr4n9.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/175fbbcd-e50a-480c-bab2-ca16d4678322.mp4";
@@ -971,14 +972,14 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onH
   const addFiles = async (list: Iterable<File>) => {
     const errors: string[] = [];
     for (const file of list) {
-      if (pendingAttachments.length + reading >= 10) {
-        errors.push("Up to 10 attachments per message.");
+      if (pendingAttachments.length + reading >= 14) {
+        errors.push("Up to 14 attachments per message.");
         break;
       }
       reading++;
       sync();
       try {
-        pendingAttachments.push(await readAttachment(file));
+        pendingAttachments.push(...(await readAttachments(file)));
       } catch (error) {
         errors.push(error instanceof Error ? error.message : String(error));
       }
@@ -1000,7 +1001,57 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onH
     void addFiles(files);
   });
 
+  // voice input: the browser's own speech recognition, in the interface language
+  const Rec = (window as unknown as { SpeechRecognition?: new () => any; webkitSpeechRecognition?: new () => any }).SpeechRecognition ?? (window as unknown as { webkitSpeechRecognition?: new () => any }).webkitSpeechRecognition;
+  const micBtn = h("button", { class: "mic-btn", type: "button", title: "Voice input", "aria-label": "Voice input" }, icon("mic", 18));
+  let rec: any;
+  const stopVoice = () => {
+    try {
+      rec?.stop();
+    } catch {
+      /* already stopped */
+    }
+  };
+  micBtn.addEventListener("click", () => {
+    if (!Rec) {
+      alert(tr("Voice input isn't supported in this browser. Try Chrome, Edge or Safari."));
+      return;
+    }
+    if (rec) return stopVoice();
+    const base = input.value ? input.value.replace(/\s*$/, " ") : "";
+    let finalText = "";
+    rec = new Rec();
+    rec.lang = getLang() === "ru" ? "ru-RU" : "en-US";
+    rec.interimResults = true;
+    rec.continuous = true;
+    rec.onresult = (e: any) => {
+      let interim = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const r = e.results[i];
+        if (r.isFinal) finalText += r[0].transcript;
+        else interim += r[0].transcript;
+      }
+      input.value = base + finalText + interim;
+      sync();
+    };
+    rec.onerror = (e: any) => {
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") alert(tr("Allow the microphone for this site to dictate."));
+    };
+    rec.onend = () => {
+      rec = undefined;
+      micBtn.classList.remove("on");
+      sync();
+    };
+    try {
+      rec.start();
+      micBtn.classList.add("on");
+    } catch {
+      rec = undefined;
+    }
+  });
+
   const submit = () => {
+    stopVoice();
     if (chat && runs.has(chat.id)) {
       runs.get(chat.id)?.abort();
       return;
@@ -1143,7 +1194,7 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onH
     h(
       "div",
       { class: "menu plus-menu" },
-      h("button", { class: "menu-item", type: "button", onclick: () => (closePopover(), fileInput.click()) }, icon("clip", 18), h("span", { class: "menu-text" }, h("strong", {}, "Attach files"), h("small", {}, "Photos, PDFs and text files"))),
+      h("button", { class: "menu-item", type: "button", onclick: () => (closePopover(), fileInput.click()) }, icon("clip", 18), h("span", { class: "menu-text" }, h("strong", {}, "Attach files"), h("small", {}, "Photos, video, PDFs and text files"))),
       h("div", { class: "menu-title" }, "Create"),
       ...CREATE.filter((c) => hubOf(config) === "focus" || c.kind === "image" || c.kind === "video").map((c) =>
         h(
@@ -1215,6 +1266,7 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onH
       ...(hub === "focus" && !fa ? [thinkChip] : []),
       opts,
       h("span", { class: "spacer" }),
+      micBtn,
       sendBtn,
     );
   };
