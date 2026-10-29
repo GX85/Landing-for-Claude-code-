@@ -538,5 +538,30 @@
     <div id="app" class="app-root" hidden></div>
 
     <script type="module" src="/src/main.ts"></script>
-  </body>
+      <script>
+      /* if the app can't start (a stale cached page, a failed download), say so and offer a reload instead of a blank screen */
+      (function () {
+        addEventListener("vite:preloadError", function () {
+          try {
+            if (!sessionStorage.getItem("focus.reloaded")) {
+              sessionStorage.setItem("focus.reloaded", "1");
+              location.reload();
+            }
+          } catch (e) {}
+        });
+        setTimeout(function () {
+          var up = function (id) {
+            var el = document.getElementById(id);
+            return el && !el.hidden;
+          };
+          if (up("landing") || up("app") || up("signin") || document.getElementById("boot-fail")) return;
+          var d = document.createElement("div");
+          d.id = "boot-fail";
+          d.style.cssText = "position:fixed;inset:0;z-index:99999;display:grid;place-items:center;background:#0a0a0c;color:#f4f4f2;font:16px/1.5 system-ui,sans-serif;text-align:center;padding:24px";
+          d.innerHTML = '<div><p style="margin:0 0 16px">Focus didn\u2019t start. / Focus \u043d\u0435 \u0437\u0430\u043f\u0443\u0441\u0442\u0438\u043b\u0441\u044f.</p><button style="font:inherit;padding:10px 22px;border:0;border-radius:999px;background:#f4f4f2;color:#0a0a0c;cursor:pointer" onclick="location.reload()">Reload / \u041f\u0435\u0440\u0435\u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c</button></div>';
+          document.body.appendChild(d);
+        }, 10000);
+      })();
+    </script>
+</body>
 </html>

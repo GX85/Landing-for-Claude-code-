@@ -95,7 +95,9 @@ addEventListener("popstate", () => void apply(parseRoute(currentPath())));
 // the landing manages its own scroll position
 history.scrollRestoration = "manual";
 
-void initI18n().then(() => apply(parseRoute(currentPath())));
+void initI18n()
+  .catch(() => undefined)
+  .then(() => apply(parseRoute(currentPath())));
 
 // warm the app bundle while the landing plays
 if (parseRoute(currentPath()).name === "landing") {

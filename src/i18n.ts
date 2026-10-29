@@ -74,7 +74,12 @@ function fixTree(root: Node): void {
 export async function initI18n(): Promise<void> {
   document.documentElement.lang = lang;
   if (lang !== "ru") return;
-  translate = (await import("./i18n-ru")).translateRu;
+  try {
+    translate = (await import("./i18n-ru")).translateRu;
+  } catch {
+    // the dictionary couldn't load (a stale page, a bad network): carry on in English rather than show nothing
+    return;
+  }
   const run = () => {
     fixTree(document.documentElement);
     new MutationObserver((records) => {
