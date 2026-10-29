@@ -227,10 +227,18 @@ function suggestionsFor(ctx: Ctx, config: ChatConfig, main: HTMLElement, chat: C
     );
 }
 
+/** The thinking levels, as the slider shows them. */
+const THINK = [
+  { name: "Auto", hint: "Focus decides for every message: a quick reply to “hi”, deep thinking for hard questions and builds." },
+  { name: "Quick", hint: "Answers right away and keeps it short. Best for small talk and simple facts." },
+  { name: "Think", hint: "Thinks it through before answering. A good default for real questions." },
+  { name: "Deep", hint: "Reasons step by step, checks its work and goes long. Slower, but sharper on hard problems." },
+];
+
 const TIER_COLORS: Record<Tier, string> = { storm: "#e5484d", gen: "#8b5cf6", clorus: "#f59e0b" };
 
 /** Focus chats run one assistant per tier; it is made on the fly and never listed on the Agents page. */
-function tierAgent(ctx: Ctx, tier: Tier): Agent {
+function tierAgent(ctx: Ctx, tier: Tier, think = 0): Agent {
   let conn = ctx.state.connections.find((c) => c.provider === "focus");
   if (!conn) {
     conn = newConnection("focus");
@@ -238,7 +246,7 @@ function tierAgent(ctx: Ctx, tier: Tier): Agent {
     ctx.persist();
   }
   const t = TIERS[tier];
-  return { id: `tier-${tier}`, name: t.name, connectionId: conn.id, kind: "chat", model: `tier:${tier}`, effort: "", role: `${PERSONA}\n\n${t.role}`, color: TIER_COLORS[tier], enabled: true, skills: [], avatar: "" };
+  return { id: `tier-${tier}`, name: t.name, connectionId: conn.id, kind: "chat", model: `tier:${tier}:${think}`, effort: "", role: `${PERSONA}\n\n${t.role}`, color: TIER_COLORS[tier], enabled: true, skills: [], avatar: "" };
 }
 
 /* ---------- thinking ---------- */
@@ -603,7 +611,7 @@ function historyBefore(chat: Chat, userMsg: Message): ChatTurn[] {
 async function runTurn(ctx: Ctx, chat: Chat, userMsg: Message): Promise<void> {
   // Focus: one assistant per tier. Aeronus (and chats from before hubs existed): the whole team.
   const focusHub = chat.config.hub === "focus";
-  const tier = focusHub ? tierAgent(ctx, chat.config.tier) : undefined;
+  const tier = focusHub ? tierAgent(ctx, chat.config.tier, chat.config.think ?? 0) : undefined;
   const team = tier ? [tier] : teamOf(ctx, chat.config);
   const lead = tier ?? leadOf(ctx, chat.config, team);
   const mode = focusHub ? "solo" : chat.config.mode;
@@ -883,6 +891,36 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onH
     ...TIER_ORDER.map(tierOption),
   );
   const opts = h("div", { class: "bar-opts" });
+
+  // how hard Focus thinks: a slider behind a small chip
+  const thinkChip = h("button", { class: "chip-btn think-chip", type: "button", "data-popover": "think", "aria-haspopup": "dialog", title: "How hard Focus thinks" });
+  const paintThink = () => {
+    const lvl = config.think ?? 0;
+    thinkChip.dataset.level = String(lvl);
+    thinkChip.replaceChildren(h("span", { class: "think-bars", "aria-hidden": "true" }, h("i"), h("i"), h("i")), THINK[lvl].name);
+    thinkChip.setAttribute("aria-label", `Thinking: ${THINK[lvl].name}`);
+  };
+  const thinkMenu = () => {
+    const hint = h("p", { class: "think-hint" }, THINK[config.think ?? 0].hint);
+    const range = h("input", { type: "range", min: 0, max: 3, step: 1, value: String(config.think ?? 0), class: "think-range", "aria-label": "Thinking level" });
+    const marks = h("div", { class: "think-marks" }, ...THINK.map((t, i) => h("button", { type: "button", "data-i": String(i), onclick: () => set(i) }, t.name)));
+    const set = (i: number) => {
+      config.think = i;
+      range.value = String(i);
+      range.style.setProperty("--p", `${(i / 3) * 100}%`);
+      hint.textContent = THINK[i].hint;
+      for (const b of marks.querySelectorAll<HTMLElement>("button")) b.classList.toggle("on", b.dataset.i === String(i));
+      ctx.state.config = structuredClone(config);
+      ctx.persist();
+      paintThink();
+    };
+    range.addEventListener("input", () => set(Number(range.value)));
+    const menu = h("div", { class: "menu think-menu" }, h("div", { class: "menu-title" }, "Thinking"), range, marks, hint);
+    set(config.think ?? 0);
+    return menu;
+  };
+  thinkChip.addEventListener("click", (e) => openPopover(e.currentTarget as HTMLElement, thinkMenu()));
+  paintThink();
   let shownHub: Hub | undefined;
 
   const renderBar = () => {
@@ -925,6 +963,7 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onH
     bar.replaceChildren(
       h("button", { class: "chip-btn icon-only", type: "button", title: "Attach images, PDFs or text files", "aria-label": "Attach files", onclick: () => fileInput.click() }, icon("clip")),
       hubSwitch,
+      ...(hub === "focus" ? [thinkChip] : []),
       opts,
       h("span", { class: "spacer" }),
       sendBtn,

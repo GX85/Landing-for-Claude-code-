@@ -155,48 +155,76 @@ async function runFocus(input: RunInput): Promise<RunResult> {
   if (key) {
     return runOpenAICompatible({ ...input, agent: { ...input.agent, provider: "pollinations", apiKey: key, model: FOCUS_FREE_MODEL } });
   }
-  const { system, messages, signal, onText } = input;
-  const res = await fetch(POLLINATIONS_FREE_URL, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      model: FOCUS_FREE_MODEL,
-      stream: true,
-      messages: [...(system ? [{ role: "system", content: system }] : []), ...messages.map((m) => ({ role: m.role, content: m.content + imageNote(m) }))],
-    }),
-    signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(REQUEST_TIMEOUT_MS)]) : AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-  });
-  if (!res.ok || !res.body) {
-    throw new UserError(res.status === 429 ? "The free model is busy right now. Try again in a minute, or add your own key in Connections." : `The free model is unavailable (${res.status}). Try again shortly.`, res.status === 429 ? 429 : 502);
-  }
-  let text = "";
-  let model = FOCUS_FREE_MODEL;
-  let buffer = "";
-  const decoder = new TextDecoder();
-  for await (const chunk of res.body as unknown as AsyncIterable<Uint8Array>) {
-    buffer += decoder.decode(chunk, { stream: true });
-    let nl: number;
-    while ((nl = buffer.indexOf("\n")) >= 0) {
-      const line = buffer.slice(0, nl).trim();
-      buffer = buffer.slice(nl + 1);
-      if (!line.startsWith("data:")) continue;
-      const payload = line.slice(5).trim();
-      if (payload === "[DONE]") continue;
-      try {
-        const data = JSON.parse(payload) as { model?: string; choices?: { delta?: { content?: string } }[] };
-        model = data.model ?? model;
-        const delta = data.choices?.[0]?.delta?.content;
-        if (delta) {
-          text += delta;
-          onText?.(delta);
-        }
-      } catch {
-        // keep-alive or partial line
-      }
+  // keyless: try several free hosts from the server, for visitors whose browser can't reach them
+  let last: unknown;
+  for (const [url, model] of FREE_SERVER_MODELS) {
+    try {
+      return await streamFree(url, model, input);
+    } catch (error) {
+      if (input.signal?.aborted) throw error;
+      last = error;
     }
   }
-  if (!text.trim()) throw new UserError("The free model returned nothing. Try again.", 502);
-  return { text: text.trim(), model };
+  throw last instanceof UserError ? last : new UserError("The free models are unavailable right now. Try again shortly, or add your own key in Connections.", 502);
+}
+
+const FREE_SERVER_MODELS: [string, string][] = [
+  ["https://api.llm7.io/v1/chat/completions", "nemotron-3-nano:30b"],
+  ["https://api.llm7.io/v1/chat/completions", "mistral-Nemo-Instruct-2407"],
+  [POLLINATIONS_FREE_URL, FOCUS_FREE_MODEL],
+];
+
+/** One keyless, OpenAI-style streaming call. Gives up if nothing arrives within 15 s. */
+async function streamFree(url: string, freeModel: string, { system, messages, signal, onText }: RunInput): Promise<RunResult> {
+  const quiet = new AbortController();
+  const timer = setTimeout(() => quiet.abort(), 15000);
+  const signals = [quiet.signal, AbortSignal.timeout(REQUEST_TIMEOUT_MS), ...(signal ? [signal] : [])];
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: freeModel,
+        stream: true,
+        messages: [...(system ? [{ role: "system", content: system }] : []), ...messages.map((m) => ({ role: m.role, content: m.content + imageNote(m) }))],
+      }),
+      signal: AbortSignal.any(signals),
+    });
+    if (!res.ok || !res.body) {
+      throw new UserError(res.status === 429 ? "The free model is busy right now. Try again in a minute, or add your own key in Connections." : `The free model is unavailable (${res.status}). Try again shortly.`, res.status === 429 ? 429 : 502);
+    }
+    let text = "";
+    let model = freeModel;
+    let buffer = "";
+    const decoder = new TextDecoder();
+    for await (const chunk of res.body as unknown as AsyncIterable<Uint8Array>) {
+      buffer += decoder.decode(chunk, { stream: true });
+      let nl: number;
+      while ((nl = buffer.indexOf("\n")) >= 0) {
+        const line = buffer.slice(0, nl).trim();
+        buffer = buffer.slice(nl + 1);
+        if (!line.startsWith("data:")) continue;
+        const payload = line.slice(5).trim();
+        if (payload === "[DONE]") continue;
+        try {
+          const data = JSON.parse(payload) as { model?: string; choices?: { delta?: { content?: string } }[] };
+          model = data.model ?? model;
+          const delta = data.choices?.[0]?.delta?.content;
+          if (delta) {
+            clearTimeout(timer);
+            text += delta;
+            onText?.(delta);
+          }
+        } catch {
+          // keep-alive or partial line
+        }
+      }
+    }
+    if (!text.trim()) throw new UserError("The free model returned nothing. Try again.", 502);
+    return { text: text.trim(), model };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function runClaude({ agent, system, messages, signal, onText }: RunInput): Promise<RunResult> {

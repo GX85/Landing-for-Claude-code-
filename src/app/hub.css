@@ -671,3 +671,119 @@ html.dark .app-root .md code {
     color: var(--ink-3);
   }
 }
+
+/* ---------- thinking level ---------- */
+.think-chip {
+  gap: 7px;
+  padding: 0 11px;
+  font-size: 13px;
+  font-weight: 650;
+}
+.think-bars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 12px;
+}
+.think-bars i {
+  width: 3px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--ink) 25%, transparent);
+  transition: background-color 0.3s, box-shadow 0.3s;
+}
+.think-bars i:nth-child(1) { height: 5px; }
+.think-bars i:nth-child(2) { height: 8px; }
+.think-bars i:nth-child(3) { height: 12px; }
+.think-chip[data-level="1"] .think-bars i:nth-child(-n + 1),
+.think-chip[data-level="2"] .think-bars i:nth-child(-n + 2),
+.think-chip[data-level="3"] .think-bars i {
+  background: hsl(var(--h) 95% 60%);
+  box-shadow: 0 0 6px hsl(var(--h) 95% 60% / 0.7);
+}
+/* auto: the bars breathe, Focus picks */
+.think-chip[data-level="0"] .think-bars i {
+  background: hsl(var(--h) 90% 60% / 0.8);
+  animation: bar-auto 1.8s ease-in-out infinite;
+}
+.think-chip[data-level="0"] .think-bars i:nth-child(2) { animation-delay: 0.2s; }
+.think-chip[data-level="0"] .think-bars i:nth-child(3) { animation-delay: 0.4s; }
+@keyframes bar-auto {
+  50% { opacity: 0.35; }
+}
+.think-menu {
+  width: min(320px, calc(100vw - 32px));
+}
+.think-range {
+  --p: 0%;
+  width: 100%;
+  margin: 14px 0 6px;
+  height: 22px;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+.think-range::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, hsl(var(--h) 95% 60%) var(--p), color-mix(in srgb, var(--ink) 14%, transparent) var(--p));
+}
+.think-range::-moz-range-track {
+  height: 6px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--ink) 14%, transparent);
+}
+.think-range::-moz-range-progress {
+  height: 6px;
+  border-radius: 99px;
+  background: hsl(var(--h) 95% 60%);
+}
+.think-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 22px;
+  height: 22px;
+  margin-top: -8px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 4px hsl(var(--h) 95% 60% / 0.35), 0 4px 10px rgba(0, 0, 0, 0.35);
+  transition: transform 0.2s;
+}
+.think-range::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 4px hsl(var(--h) 95% 60% / 0.35), 0 4px 10px rgba(0, 0, 0, 0.35);
+}
+.think-range:active::-webkit-slider-thumb {
+  transform: scale(1.12);
+}
+.think-marks {
+  display: flex;
+  justify-content: space-between;
+}
+.think-marks button {
+  padding: 4px 2px;
+  border: 0;
+  background: none;
+  color: var(--ink-3);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.think-marks button.on {
+  color: var(--ink);
+}
+.think-hint {
+  margin: 10px 0 2px;
+  color: var(--ink-3);
+  font-size: 13px;
+  line-height: 1.45;
+}
+@media (prefers-reduced-motion: reduce) {
+  .think-chip[data-level="0"] .think-bars i {
+    animation: none;
+  }
+}

@@ -221,6 +221,8 @@ export type Tier = "storm" | "gen" | "clorus";
 export interface ChatConfig {
   hub: Hub;
   tier: Tier;
+  /** Thinking level for Focus: 0 auto, 1 quick, 2 thoughtful, 3 deep. */
+  think?: number;
   mode: ModeId;
   agentIds: string[];
   leadId: string;

@@ -99,15 +99,17 @@ const stripThinking = (text: string) => text.replace(/<think>[\s\S]*?(<\/think>|
 
 /**
  * Free Focus models without a key run straight from the browser, so each
- * visitor gets their own fair-use quota. If the chosen one fails, the
- * Pollinations model takes over.
+ * visitor gets their own fair-use quota. Falling back to other models is the
+ * caller's job (see chainCall).
  */
 async function callFree(model: string, system: string, messages: ChatTurn[], signal: AbortSignal, onText: (full: string) => void, maxTokens = 8000): Promise<CallResult> {
   const body = (id: string) =>
     JSON.stringify({
       model: id,
       stream: true,
-      max_tokens: maxTokens,
+      // LLM7 counts the requested maximum against a small daily quota per visitor, so only
+      // Pollinations is told a size; LLM7 uses its own default and the Builder continues cut-off code
+      ...(model.startsWith("pollinations/") ? { max_tokens: maxTokens } : {}),
       messages: [
         { role: "system", content: system },
         ...messages.map((m) => ({ role: m.role, content: m.images?.length ? `${m.content}\n\n[An image was attached, but this free model can't see images.]` : m.content })),
@@ -117,21 +119,21 @@ async function callFree(model: string, system: string, messages: ChatTurn[], sig
     const [host, ...rest] = full.split("/");
     const id = rest.join("/");
     const res = await fetch(FREE_URLS[host], { method: "POST", headers: { "content-type": "application/json" }, body: body(id), signal });
-    if (!res.ok || !res.body) throw new Error(res.status === 429 ? "The free server is busy right now (rate limit)." : `The free model answered ${res.status}.`);
+    if (!res.ok || !res.body) {
+      const detail = (await res.text().catch(() => "")).slice(0, 400);
+      if (/quota/i.test(detail)) exhausted.add(host);
+      throw new Error(/quota/i.test(detail) ? "today's free quota on this server is used up" : res.status === 429 ? "the free server is busy (rate limit)" : `the free model answered ${res.status}`);
+    }
     const { text } = await readSse(res, (t) => onText(stripThinking(t)));
     const clean = stripThinking(text).trim();
     if (!clean) throw new Error("The free model sent an empty answer.");
     return { text: clean, model: id };
   };
-  try {
-    return await attempt(model);
-  } catch (error) {
-    const fallback = "pollinations/openai-fast";
-    if (signal.aborted || model === fallback) throw error;
-    onText("");
-    return attempt(fallback);
-  }
+  return attempt(model);
 }
+
+/** Free hosts that said today's quota is used up; their other models are skipped for this visit. */
+const exhausted = new Set<string>();
 
 const GREET_KEY = "focus.greetings";
 
@@ -214,22 +216,55 @@ async function callInArtifact(agent: Agent, system: string, messages: ChatTurn[]
 let serverOpenRouter: boolean | undefined;
 
 /** A Focus tier: tries its OpenRouter models, then keyless free ones, until one answers. */
-const shortModel = (m: string) => m.replace(/^(openrouter|llm7|pollinations)\//, "").replace(/^[\w-]+\//, "").replace(/:free$/, "");
+const shortModel = (m: string) => (m.startsWith("server/") ? "free model" : m.replace(/^(openrouter|llm7|pollinations)\//, "").replace(/^[\w-]+\//, "").replace(/:free$/, ""));
 
-/** Tries each model in turn until one answers; returns which one did. */
-async function chainCall(models: string[], agent: Agent, conn: Connection, system: string, messages: ChatTurn[], signal: AbortSignal, onText: (full: string) => void, maxTokens?: number): Promise<CallResult & { used: string }> {
+/** Fastest first: used when Focus only needs a quick answer. */
+const SPEED_RANK = ["pollinations/openai-fast", "llm7/mistral-Nemo-Instruct-2407", "llm7/nemotron-3-nano:30b", "llm7/gpt-oss:20b", "llm7/minimax-m2.7"];
+const speedOf = (m: string) => (SPEED_RANK.indexOf(m) + 1 || 50) + (m.startsWith("openrouter/") ? 20 : 0);
+
+/**
+ * Tries each model in turn until one answers; returns which one did.
+ * A model that sends nothing for `firstTokenMs` is dropped for the next one,
+ * so one stuck server can't keep the user waiting for minutes.
+ */
+async function chainCall(
+  models: string[],
+  agent: Agent,
+  conn: Connection,
+  system: string,
+  messages: ChatTurn[],
+  signal: AbortSignal,
+  onText: (full: string) => void,
+  opts: { maxTokens?: number; firstTokenMs?: number; totalMs?: number } = {},
+): Promise<CallResult & { used: string }> {
   const own = userConnections.some((c) => c.provider === "openrouter" && c.apiKey);
   let last: unknown;
   for (const model of models) {
     if (model.startsWith("openrouter/") && !own && serverOpenRouter === false) continue;
+    if (exhausted.has(model.split("/")[0])) continue;
+    const attempt = new AbortController();
+    const stop = () => attempt.abort();
+    signal.addEventListener("abort", stop, { once: true });
+    let heard = false;
+    const firstTimer = setTimeout(() => !heard && attempt.abort(), opts.firstTokenMs ?? 20000);
+    const totalTimer = setTimeout(stop, opts.totalMs ?? 180000);
     try {
-      const r = await callAgent({ ...agent, model }, conn, system, messages, signal, onText, { maxTokens });
+      onText("");
+      // "server/…" goes through Focus's own server, for when the browser can't reach the free hosts
+      const r = await callAgent({ ...agent, model: model.startsWith("server/") ? "server" : model }, conn, system, messages, attempt.signal, (t) => {
+        heard = true;
+        onText(t);
+      }, { maxTokens: opts.maxTokens });
       return { ...r, used: model };
     } catch (error) {
       if (signal.aborted) throw error;
-      last = error;
+      last = attempt.signal.aborted ? new Error(heard ? "the model stopped mid-answer" : "the model took too long to start") : error;
       // the server has no OpenRouter key: stop asking it for the rest of this visit
       if (model.startsWith("openrouter/") && !own && /FOCUS_OPENROUTER_KEY|needs Focus/.test(String((error as Error).message))) serverOpenRouter = false;
+    } finally {
+      clearTimeout(firstTimer);
+      clearTimeout(totalTimer);
+      signal.removeEventListener("abort", stop);
     }
   }
   const why = last instanceof Error ? last.message : "";
@@ -239,33 +274,69 @@ async function chainCall(models: string[], agent: Agent, conn: Connection, syste
 const tierModels = (tier: Tier) => {
   const t = TIERS[tier];
   const own = userConnections.some((c) => c.provider === "openrouter" && c.apiKey);
-  return [...(own || serverOpenRouter !== false ? t.or.slice(0, 2).map((m) => `openrouter/${m}`) : []), ...t.free];
+  return [...(own || serverOpenRouter !== false ? t.or.slice(0, 2).map((m) => `openrouter/${m}`) : []), ...t.free, "server/openai-fast"];
 };
 
+/* ---------- thinking level ---------- */
+
+/** 0 = auto (Focus decides per message), 1 = quick, 2 = thoughtful, 3 = deep. */
+export type ThinkLevel = 0 | 1 | 2 | 3;
+
+const SMALL_TALK = /^(привет|прив|здравствуй|здравствуйте|хай|ку|йо|hi|hey|hello|yo|sup|спасибо|спс|thanks|thank you|thx|ок|окей|ok|okay|пока|bye|как дела|как ты|how are you|what's up|доброе утро|добрый (день|вечер)|good (morning|evening|night))[\s!?.,)]*$/i;
+const HARD = /(```|докажи|prove|почему|why|объясни|explain|сравни|compare|проанализ|analy[sz]|план|plan|стратеги|strategy|рассчитай|calculate|реши|solve|алгоритм|algorithm|архитектур|architecture|debug|отладь|ошибк|error|оптимиз|optimi[sz]|пошагово|step by step)/i;
+
+/** How hard to think about this message when the level is Auto. */
+function autoLevel(text: string): 1 | 2 | 3 {
+  const t = text.trim();
+  if (detectBuild(t)) return 3;
+  if (SMALL_TALK.test(t) || (t.length < 40 && !/\?/.test(t))) return 1;
+  if (HARD.test(t) || t.length > 600) return 3;
+  return 2;
+}
+
+const LEVEL = {
+  1: { name: "quick", effort: "low", note: "Think level: quick. Answer right away, briefly and naturally. No long reasoning, no lists unless asked.", maxTokens: 1500, firstTokenMs: 14000 },
+  2: { name: "thoughtful", effort: "medium", note: "Think level: thoughtful. Think it through, then answer clearly with the depth the question needs.", maxTokens: 6000, firstTokenMs: 25000 },
+  3: { name: "deep", effort: "high", note: "Think level: deep. Before answering, reason step by step (silently): consider alternatives and edge cases, check facts and arithmetic, then give a well-structured, thorough answer.", maxTokens: 12000, firstTokenMs: 45000 },
+} as const;
+
 /**
- * A Focus tier: tries its OpenRouter models, then keyless free ones, until one answers.
+ * A Focus tier: tries its models in order until one answers. Every tier handles any task;
+ * the tier sets which models do it, the think level how hard they try.
  * Requests to build something go to the Builder, on the strongest models, whatever the tier.
  */
-async function callTier(tier: Tier, agent: Agent, conn: Connection, system: string, messages: ChatTurn[], signal: AbortSignal, onText: (full: string) => void): Promise<CallResult> {
+async function callTier(spec: string, agent: Agent, conn: Connection, system: string, messages: ChatTurn[], signal: AbortSignal, onText: (full: string) => void): Promise<CallResult> {
+  const [tierName, levelText] = spec.split(":");
+  const tier = (tierName in TIERS ? tierName : "gen") as Tier;
   const ask = messages.at(-1)?.content ?? "";
   // a new build request, or a change to the thing built in the previous answer
   const previous = /<!--\s*focus:preview kind=(\w+)/.exec([...messages].reverse().find((m) => m.role === "assistant")?.content ?? "")?.[1] as BuildKind | undefined;
   const kind = detectBuild(ask) ?? (previous && ask.length < 600 && !/\?\s*$/.test(ask) ? previous : null);
+  const chosen = Number(levelText) as ThinkLevel;
+  const level = LEVEL[chosen >= 1 && chosen <= 3 ? (chosen as 1 | 2 | 3) : autoLevel(ask)];
+
   if (kind) {
     let sticky: string | undefined;
     const models = [...new Set([...tierModels("clorus"), ...tierModels(tier)])];
     const call: BuildCall = async (sys, msgs, cb, maxTokens) => {
       const order = sticky ? [sticky, ...models.filter((m) => m !== sticky)] : models;
       // the Focus personality sets the tone; the builder's rules come last so they win
-      const r = await chainCall(order, agent, conn, `${system}\n\n${sys}`, msgs, signal, cb, maxTokens);
+      const r = await chainCall(order, { ...agent, effort: "high" }, conn, `${system}\n\n${sys}`, msgs, signal, cb, { maxTokens, firstTokenMs: 60000, totalMs: 300000 });
       sticky = r.used;
       return r;
     };
     const text = await runBuild(kind, messages, call, onText, signal);
     return { text, model: `Builder · ${sticky ? shortModel(sticky) : "free models"}` };
   }
-  const r = await chainCall(tierModels(tier), agent, conn, system, messages, signal, (t) => onText(t));
-  return { ...r, model: shortModel(r.used) };
+
+  let models = tierModels(tier);
+  // a quick answer goes to the fastest of the tier's models first
+  if (level.name === "quick") models = [...models].sort((a, b) => speedOf(a) - speedOf(b));
+  const r = await chainCall(models, { ...agent, effort: level.effort }, conn, `${system}\n\n${level.note}`, messages, signal, onText, {
+    maxTokens: level.maxTokens,
+    firstTokenMs: level.firstTokenMs,
+  });
+  return { ...r, model: `${shortModel(r.used)} · ${level.name}` };
 }
 
 /** Calls one chat agent and streams its text into `onText`. */
@@ -278,7 +349,7 @@ export async function callAgent(
   onText: (full: string) => void,
   opts: { maxTokens?: number } = {},
 ): Promise<CallResult> {
-  if (agent.model.startsWith("tier:")) return callTier(agent.model.slice(5) as Tier, agent, conn, system, messages, signal, onText);
+  if (agent.model.startsWith("tier:")) return callTier(agent.model.slice(5), agent, conn, system, messages, signal, onText);
   if (import.meta.env.VITE_ARTIFACT === "1") return callInArtifact(agent, system, messages, signal, onText);
   if (conn.provider === "ollama") return callOllama(agent, conn, system, messages, signal, onText);
   if (conn.provider === "focus" && agent.model.startsWith("openrouter/")) {
