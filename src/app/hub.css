@@ -845,3 +845,38 @@ html.dark .app-root .md code {
 .think-menu {
   width: min(330px, calc(100vw - 56px));
 }
+
+/* ======================================================================
+   Phones: blur is the most expensive thing a browser draws while scrolling,
+   so the app uses solid surfaces there instead.
+   ====================================================================== */
+@media (hover: none), (max-width: 720px) {
+  .app-root .composer,
+  .app-root .side,
+  .app-root .popover,
+  .app-root .main-head::before,
+  .app-root .head-actions .icon-btn,
+  .app-root .head-left .icon-btn,
+  .app-root .hub-switch,
+  .app-root .tier-seg {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+  .app-root .composer,
+  .app-root .composer-dock .composer {
+    background: var(--card);
+  }
+  html.dark .app-root .composer,
+  html.dark .app-root .composer-dock .composer {
+    background: #18181c;
+  }
+  .app-root .popover {
+    background: var(--card);
+  }
+  html.dark .app-root .popover {
+    background: #1b1b20;
+  }
+  .hello-logo::before {
+    animation: none;
+  }
+}

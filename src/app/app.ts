@@ -58,6 +58,19 @@ function navLink(label: string, iconName: string, to: Route, active: boolean): H
 
 function mount(el: HTMLElement): void {
   root = el;
+  // Pin the app to the part of the screen the user can actually see. Phone keyboards and
+  // browser bars change that area differently in every browser; the visual viewport knows.
+  const vv = window.visualViewport;
+  if (vv) {
+    const fit = () => {
+      el.style.top = `${vv.offsetTop}px`;
+      el.style.height = `${vv.height}px`;
+      el.style.bottom = "auto";
+    };
+    vv.addEventListener("resize", fit);
+    vv.addEventListener("scroll", fit);
+    fit();
+  }
   searchInput = h("input", { type: "search", placeholder: "Search chats", "aria-label": "Search chats", oninput: () => renderChats() });
   chatsEl = h("div", { class: "side-chats" });
   footEl = h("div", { class: "side-foot" });

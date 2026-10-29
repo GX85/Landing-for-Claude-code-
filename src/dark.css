@@ -486,3 +486,37 @@ html.light .landing .glass:not(.nav) {
   content-visibility: auto;
   contain-intrinsic-size: auto 900px;
 }
+
+/* ======================================================================
+   Phones and touch screens: keep only what's cheap to draw.
+   No drifting fog, no floating colour orbs, no blur behind the nav.
+   ====================================================================== */
+@media (hover: none), (max-width: 720px) {
+  .fog i,
+  html.dark .fog i,
+  html.light .fog i {
+    animation: none !important;
+    will-change: auto;
+  }
+  .fog i:nth-child(2) {
+    display: none;
+  }
+  .orb {
+    animation: none !important;
+    will-change: auto;
+  }
+  .cells-lit {
+    display: none;
+  }
+  .landing .nav.scrolled,
+  .landing .glass {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+  html.dark .landing .nav.scrolled {
+    background: rgba(18, 18, 22, 0.96);
+  }
+  html.light .landing .nav.scrolled {
+    background: rgba(250, 250, 249, 0.96);
+  }
+}

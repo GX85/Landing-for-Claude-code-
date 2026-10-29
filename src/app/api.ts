@@ -214,6 +214,7 @@ async function callInArtifact(agent: Agent, system: string, messages: ChatTurn[]
 }
 
 let serverOpenRouter: boolean | undefined;
+let orPausedUntil = 0;
 
 /** A Focus tier: tries its OpenRouter models, then keyless free ones, until one answers. */
 const shortModel = (m: string) => (m.startsWith("server/") ? "free model" : m.replace(/^(openrouter|llm7|pollinations)\//, "").replace(/^[\w-]+\//, "").replace(/:free$/, ""));
@@ -240,7 +241,7 @@ async function chainCall(
   const own = userConnections.some((c) => c.provider === "openrouter" && c.apiKey);
   let last: unknown;
   for (const model of models) {
-    if (model.startsWith("openrouter/") && !own && serverOpenRouter === false) continue;
+    if (model.startsWith("openrouter/") && ((!own && serverOpenRouter === false) || Date.now() < orPausedUntil)) continue;
     if (exhausted.has(model.split("/")[0])) continue;
     const attempt = new AbortController();
     const stop = () => attempt.abort();
@@ -259,8 +260,11 @@ async function chainCall(
     } catch (error) {
       if (signal.aborted) throw error;
       last = attempt.signal.aborted ? new Error(heard ? "the model stopped mid-answer" : "the model took too long to start") : error;
+      const msg = String((error as Error).message);
       // the server has no OpenRouter key: stop asking it for the rest of this visit
-      if (model.startsWith("openrouter/") && !own && /FOCUS_OPENROUTER_KEY|needs Focus/.test(String((error as Error).message))) serverOpenRouter = false;
+      if (model.startsWith("openrouter/") && !own && /FOCUS_OPENROUTER_KEY|needs Focus/.test(msg)) serverOpenRouter = false;
+      // OpenRouter's free models are rate limited per key: give them a few minutes off
+      if (model.startsWith("openrouter/") && /429|rate.?limit|quota|credits|busy/i.test(msg)) orPausedUntil = Date.now() + 5 * 60_000;
     } finally {
       clearTimeout(firstTimer);
       clearTimeout(totalTimer);
