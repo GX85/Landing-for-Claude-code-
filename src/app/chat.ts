@@ -431,12 +431,27 @@ function mediaEl(url: string | undefined, alt: string): HTMLElement | null {
     );
     return box;
   }
-  return h(
-    "div",
-    { class: "media-box" },
-    isImage(url) ? h("img", { class: "media", src: url, alt, loading: "lazy" }) : h("video", { class: "media", src: url, controls: true, playsinline: true }),
-    download(url),
-  );
+  const box = h("div", { class: "media-box" });
+  if (isImage(url)) {
+    const img = h("img", { class: "media", src: url, alt, loading: "lazy" });
+    // the free image service is often busy at full size: smaller sizes and another model are tried in turn
+    const variants = /image\.pollinations\.ai/.test(url)
+      ? [url.replace(/width=\d+&height=\d+/, "width=768&height=768"), url.replace(/width=\d+&height=\d+/, "width=768&height=768").replace(/&model=[^&]*/, "") + "&model=turbo", url.replace(/width=\d+&height=\d+/, "width=512&height=512").replace(/&model=[^&]*/, "") + "&model=flux"]
+      : [`${url}${url.includes("?") ? "&" : "?"}retry=1`];
+    let tries = 0;
+    img.addEventListener("error", () => {
+      if (tries < variants.length) {
+        const next = variants[tries++];
+        setTimeout(() => (img.src = next), 1200);
+      } else
+        box.replaceChildren(
+          h("p", { class: "step-error" }, "The picture didn't load. The free image service is busy right now."),
+          h("button", { class: "link-btn", type: "button", onclick: () => ((tries = 0), box.replaceChildren(img, download(url)), (img.src = `${variants[0]}&again=${Date.now()}`)) }, "Try again"),
+        );
+    });
+    box.append(img, download(url));
+  } else box.append(h("video", { class: "media", src: url, controls: true, playsinline: true }), download(url));
+  return box;
 }
 
 function copyButton(text: () => string, label = "Copy"): HTMLButtonElement {

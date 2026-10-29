@@ -61,12 +61,28 @@ export async function startJob(agent: AgentConfig, prompt: string, images: Image
 
   switch (agent.provider) {
     case "focus": {
+      if (agent.kind === "video") throw new UserError("Focus Video is made in your browser, not on the server.");
       if (agent.kind !== "image") break;
-      // free, keyless image generation
-      const seed = Math.floor(Math.random() * 1e9);
-      const model = agent.model ? `&model=${encodeURIComponent(agent.model)}` : "";
-      return { status: "done", media: `https://image.pollinations.ai/prompt/${encodeURIComponent(text.slice(0, 1500))}?width=1024&height=1024&nologo=true&seed=${seed}${model}`, text: "Free image from Focus." };
+      // free, keyless image generation: the free service is often overloaded at full size, so
+      // smaller sizes and another model are tried until one really answers
+      // with the site owner's Pollinations key (free to get at enter.pollinations.ai) pictures are reliable
+      const ownerKey = process.env.FOCUS_POLLINATIONS_KEY?.trim();
+      if (ownerKey) {
+        try {
+          const res = await fetch(`${POLLINATIONS}/image/${encodeURIComponent(text.slice(0, 1500))}?model=zimage`, { headers: bearer(ownerKey), signal: AbortSignal.timeout(100_000) });
+          if (res.ok) {
+            const bytes = Buffer.from(await res.arrayBuffer());
+            if (bytes.length <= 3_500_000) return { status: "done", media: dataUrl((res.headers.get("content-type") ?? "image/jpeg").split(";")[0], bytes.toString("base64")), text: "Free image from Focus." };
+          }
+        } catch {
+          // fall through to the open service
+        }
+      }
+      return { status: "done", media: freeImage(text, agent.model), text: "Free image from Focus." };
     }
+
+    case "higgsfield":
+      return startExternal(agent, text, images);
 
     case "pollinations": {
       if (agent.kind === "video") return startExternal(agent, text, images);
@@ -164,6 +180,19 @@ const DEVIN = "https://api.devin.ai/v3/organizations";
 // a literal, not derived from providers.ts: the two modules import each other
 const POLLINATIONS = "https://gen.pollinations.ai";
 
+const HIGGSFIELD = "https://api.higgsfield.ai";
+
+/**
+ * A picture from the free image service. The address is handed to the browser, which loads it from the
+ * visitor's own connection (the service limits each address, and a server shared by everyone would hit that at once).
+ * The browser tries smaller sizes and another model when the first answer is an error.
+ */
+function freeImage(text: string, model: string): string {
+  const seed = Math.floor(Math.random() * 1e9);
+  const named = model ? `&model=${encodeURIComponent(model)}` : "";
+  return `https://image.pollinations.ai/prompt/${encodeURIComponent(text.slice(0, 1500))}?width=1024&height=1024&nologo=true&seed=${seed}${named}`;
+}
+
 const firstUrl = (v: unknown): string | undefined =>
   typeof v === "string" ? (/^https?:\/\//.test(v) ? v : undefined) : Array.isArray(v) ? firstUrl(v[0]) : undefined;
 
@@ -207,6 +236,20 @@ async function startExternal(agent: AgentConfig, text: string, images: ImagePart
         json: { prompt: text, model: agent.model || "ray-2", aspect_ratio: "16:9" },
       });
       return { status: "running", job: { id: g.id }, progress: "Luma is dreaming…" };
+    }
+    case "higgsfield": {
+      if (!key.includes(":")) throw new UserError('Higgsfield needs "KEY_ID:KEY_SECRET" as the key (both from console.higgsfield.ai).');
+      const path = (agent.model || (agent.kind === "image" ? "higgsfield-ai/soul/v2/standard" : "")).replace(/^\/+/, "").replace(/^https:\/\/api\.higgsfield\.ai\//, "");
+      if (!path) throw new UserError('Set the Higgsfield model path from console.higgsfield.ai, e.g. "higgsfield-ai/soul/v2/standard".');
+      const json: Record<string, unknown> = { prompt: text };
+      if (images[0]) json.image_url = dataUrl(images[0].mediaType, images[0].data);
+      const r = await http<{ request_id?: string; status?: string }>(`${HIGGSFIELD}/${path}`, {
+        method: "POST",
+        headers: { authorization: `Key ${key}`, "idempotency-key": crypto.randomUUID() },
+        json,
+      });
+      if (!r.request_id) throw new UserError("Higgsfield didn't return a request id.");
+      return { status: "running", job: { id: r.request_id }, progress: "Higgsfield is rendering…" };
     }
     case "replicate": {
       const [owner, name] = (agent.model || "").split("/");
@@ -272,6 +315,16 @@ async function pollExternal(agent: AgentConfig, job: JobState): Promise<JobResul
       if (g.state === "completed" && g.assets?.video) return { status: "done", media: g.assets.video };
       if (g.state === "failed") return { status: "error", error: g.failure_reason || "Luma couldn't make the video." };
       return { status: "running", job, progress: g.state === "queued" ? "Queued at Luma…" : "Luma is dreaming…" };
+    }
+    case "higgsfield": {
+      const j = await http<{ status: string; error?: string | null; images?: { url: string }[]; video?: { url: string } }>(`${HIGGSFIELD}/requests/${job.id}/status`, { headers: { authorization: `Key ${key}` } });
+      if (j.status === "completed") {
+        const media = j.video?.url ?? j.images?.[0]?.url;
+        return media ? { status: "done", media } : { status: "error", error: "Higgsfield finished but returned no file." };
+      }
+      if (j.status === "failed" || j.status === "canceled") return { status: "error", error: j.error || `Higgsfield ${j.status}.` };
+      if (j.status === "nsfw") return { status: "error", error: "Higgsfield blocked this prompt." };
+      return { status: "running", job, progress: j.status === "queued" ? "Queued at Higgsfield…" : "Higgsfield is rendering…" };
     }
     case "replicate":
       return replicateResult(await http<ReplicatePrediction>(`${REPLICATE}/predictions/${job.id}`, { headers: bearer(key) }));
@@ -358,6 +411,8 @@ export async function listJobModels(agent: AgentConfig): Promise<string[]> {
   switch (agent.provider) {
     case "luma":
       return ["ray-2", "ray-flash-2"];
+    case "higgsfield":
+      return ["higgsfield-ai/soul/v2/standard"];
     case "replicate":
       return agent.kind === "image"
         ? ["black-forest-labs/flux-schnell", "black-forest-labs/flux-1.1-pro", "ideogram-ai/ideogram-v3-turbo"]

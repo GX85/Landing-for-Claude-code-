@@ -1,13 +1,31 @@
 import type { Ctx } from "./app";
 import { h, pageHead } from "./dom";
-import { openRouterCatalog } from "./pages";
+import { openRouterCatalog, resetCatalog } from "./pages";
+import { liveModelsAt, refreshLiveModels } from "./api";
 import type { ModelChoice, ModelSource } from "./store";
 
 /** Settings: which model answers in Focus and which in Aeronus. */
 
 let ollamaModels: string[] | undefined;
+let updateNote = "";
 let ollamaLoading = false;
 const OLLAMA_FALLBACK = ["gpt-oss:120b", "gpt-oss:20b"];
+
+/** Fetches both model lists again, so new and retired models show up. */
+async function updateModels(rerender: () => void): Promise<void> {
+  updateNote = "Updating…";
+  rerender();
+  resetCatalog();
+  ollamaModels = undefined;
+  ollamaLoading = false;
+  try {
+    const total = await refreshLiveModels();
+    updateNote = `Updated just now · ${total} OpenRouter models`;
+  } catch {
+    updateNote = "Couldn't reach OpenRouter. The lists below are the ones from before.";
+  }
+  rerender();
+}
 
 function ollamaCatalog(onLoad: () => void): string[] {
   if (ollamaModels) return ollamaModels;
@@ -123,6 +141,12 @@ export function renderSettings(main: HTMLElement, ctx: Ctx): void {
         "div",
         { class: "page-inner" },
         h("p", { class: "page-lede" }, inArtifact ? "In this Artifact chats run through Claude, so the model choice below applies to the full app at focus-agents.vercel.app." : "Choose which model answers your chats. Change it any time; it applies to new messages."),
+        h(
+          "div",
+          { class: "set-update" },
+          h("button", { class: "btn", type: "button", onclick: () => void updateModels(rerender) }, "Update models"),
+          h("span", { class: "field-hint" }, updateNote || (liveModelsAt() ? "Lists are up to date." : "Focus keeps its model lists fresh: retired models drop out and new free ones join.")),
+        ),
         section(ctx, "focus", "Focus chat", "The single assistant (Storm, GEN, Clorus) answers with this model.", rerender),
         section(ctx, "aeronus", "Aeronus chat", "Every team member that runs on Focus's free connection answers with this model. Agents with their own key keep theirs.", rerender),
       ),

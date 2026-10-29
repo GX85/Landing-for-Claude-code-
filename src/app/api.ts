@@ -218,6 +218,11 @@ let serverOpenRouter: boolean | undefined;
 let serverPool = 0;
 /** How many free-tier provider keys the Focus server holds (from /api/auth?a=me). */
 export const setServerPool = (n: number) => (serverPool = n);
+
+/** Refreshes the live model list once in the background when the app starts. */
+export function warmModels(): void {
+  if (!liveAt && import.meta.env.VITE_ARTIFACT !== "1") void refreshLiveModels().catch(() => undefined);
+}
 let orPausedUntil = 0;
 
 /** A Focus tier: tries its OpenRouter models, then keyless free ones, until one answers. */
@@ -282,11 +287,34 @@ async function chainCall(
 /** The model an agent asked for first, as "openrouter/…" or "ollama/…"; a bare id means OpenRouter. */
 const preferred = (agent: Agent): string | undefined => (agent.prefer ? (/^(openrouter|ollama)\//.test(agent.prefer) ? agent.prefer : `openrouter/${agent.prefer}`) : undefined);
 
+/** OpenRouter's free models as they are right now, newest first. Models that have been retired are dropped from the tiers and new ones fill in. */
+let liveFree: string[] | undefined;
+let liveAt = 0;
+export const liveModelsAt = () => liveAt;
+
+export async function refreshLiveModels(): Promise<number> {
+  const res = await fetch("https://openrouter.ai/api/v1/models", { cache: "no-store" });
+  const data = (await res.json()) as { data: { id: string; created?: number; architecture?: { output_modalities?: string[] } }[] };
+  liveFree = data.data
+    .filter((m) => m.id.endsWith(":free") && (!m.architecture?.output_modalities || m.architecture.output_modalities.includes("text")))
+    .sort((a, b) => (b.created ?? 0) - (a.created ?? 0))
+    .map((m) => m.id);
+  liveAt = Date.now();
+  return data.data.length;
+}
+
+const liveTier = (listed: string[]): string[] => {
+  if (!liveFree?.length) return listed;
+  const present = listed.filter((m) => liveFree!.includes(m));
+  const fresh = liveFree.filter((m) => !present.includes(m)).slice(0, Math.max(0, 3 - present.length));
+  return [...present, ...fresh];
+};
+
 const tierModels = (tier: Tier) => {
   const t = TIERS[tier];
   const own = userConnections.some((c) => c.provider === "openrouter" && c.apiKey);
   return [
-    ...(own || serverOpenRouter !== false ? t.or.slice(0, 2).map((m) => `openrouter/${m}`) : []),
+    ...(own || serverOpenRouter !== false ? liveTier(t.or).slice(0, 2).map((m) => `openrouter/${m}`) : []),
     // the server's own free-tier keys (Groq, Gemini…) are faster and roomier than the keyless hosts
     ...(serverPool > 0 ? ["server/pool"] : []),
     ...t.free,
@@ -471,8 +499,21 @@ const wait = (ms: number, signal: AbortSignal) =>
     signal.addEventListener("abort", () => (clearTimeout(t), reject(new DOMException("Stopped", "AbortError"))), { once: true });
   });
 
+/**
+ * Focus Video: free, no key. No open video model runs without a paid key, so Focus does what it can do for free:
+ * a language model writes a short animated film, Focus runs it to check it works, and it plays right in the chat.
+ */
+async function focusClip(agent: Agent, conn: Connection, prompt: string, signal: AbortSignal, onProgress: (status: string) => void): Promise<CallResult> {
+  const models = [...new Set([...tierModels("clorus"), ...tierModels("gen")])];
+  const call: BuildCall = (sys, msgs, cb, maxTokens) =>
+    chainCall(models, { ...agent, kind: "chat", effort: "high" }, conn, sys, msgs, signal, cb, { maxTokens, firstTokenMs: 60000, totalMs: 300000 });
+  const text = await runBuild("clip", [{ role: "user", content: prompt }], call, (full) => onProgress(full.split("\n")[0].replace(/^\*|\*$/g, "")), signal);
+  return { text, model: "Focus Video · animated clip" };
+}
+
 /** Runs a media or agent job: starts it, then polls until it finishes. */
 export async function runJob(agent: Agent, conn: Connection, prompt: string, images: ImagePart[], signal: AbortSignal, onProgress: (status: string) => void): Promise<CallResult> {
+  if (conn.provider === "focus" && agent.kind === "video") return focusClip(agent, conn, prompt, signal, onProgress);
   const post = async (body: object): Promise<JobResponse> => {
     const res = await fetch("/api/job", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ agent: agentPayload(agent, conn), ...body }), signal });
     if (!res.ok) throw await errorFrom(res);

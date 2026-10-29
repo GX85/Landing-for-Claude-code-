@@ -18,6 +18,7 @@ export type Provider =
   | "webhook"
   | "luma"
   | "replicate"
+  | "higgsfield"
   | "manus"
   | "jules"
   | "devin"
@@ -38,6 +39,7 @@ export const PROVIDERS: readonly Provider[] = [
   "webhook",
   "luma",
   "replicate",
+  "higgsfield",
   "manus",
   "jules",
   "devin",

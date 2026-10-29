@@ -1,6 +1,6 @@
 import type { Ctx } from "./app";
 import { fetchModels } from "./api";
-import { h, icon, pageHead } from "./dom";
+import { h, icon, pageHead, slideSeg } from "./dom";
 import { MODES } from "./modes";
 import { agentAvatar } from "./brand";
 import {
@@ -58,6 +58,11 @@ let orModels: OrModel[] | undefined;
 let orLoading = false;
 
 /** OpenRouter's public model list, loaded once; the page re-renders when it arrives. */
+export function resetCatalog(): void {
+  orModels = undefined;
+  orLoading = false;
+}
+
 export function openRouterCatalog(onLoad: () => void): OrModel[] {
   if (orModels) return orModels;
   if (!orLoading) {
@@ -268,10 +273,11 @@ export function renderAgents(main: HTMLElement, ctx: Ctx): void {
         isChat && conn && !["webhook"].includes(conn.provider)
           ? field(
               "Effort",
-              h(
-                "select",
-                { onchange: (e) => update({ effort: (e.target as HTMLSelectElement).value as Effort }) },
-                ...(["", "low", "medium", "high", "xhigh", "max"] as Effort[]).map((v) => h("option", { value: v, selected: v === agent.effort }, v || "model default")),
+              slideSeg(
+                (["", "low", "medium", "high", "xhigh", "max"] as Effort[]).map((v) => ({ value: v, label: v || "default" })),
+                agent.effort,
+                (v) => update({ effort: v }),
+                "Effort",
               ),
               EFFORT_HINT[conn.provider] ?? "How hard the model thinks before answering. Models without a thinking setting ignore it.",
             )

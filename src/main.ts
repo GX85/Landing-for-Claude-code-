@@ -35,7 +35,11 @@ async function apply(route: Route): Promise<void> {
 
   const { authInfo, renderSignIn } = await import("./app/signin");
   const auth = await authInfo();
-  (await import("./app/api")).setServerPool(auth.pool ?? 0);
+  {
+    const api = await import("./app/api");
+    api.setServerPool(auth.pool ?? 0);
+    api.warmModels();
+  }
   if (auth.enabled && !auth.user) {
     hideLanding();
     appRoot.hidden = true;

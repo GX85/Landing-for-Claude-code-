@@ -290,7 +290,7 @@ export function show(el: HTMLElement, route: Route, go: Go): void {
     }
   }
   slideIn(previous, route);
-  for (const lede of main.querySelectorAll<HTMLElement>(".page-lede")) void typeReveal(lede, 250);
+  for (const lede of main.querySelectorAll<HTMLElement>(".page-lede, .set-lede, .field-hint, .hello-sub, .ma-pv-model")) void typeReveal(lede, 250);
 }
 
 export function unmount(): void {

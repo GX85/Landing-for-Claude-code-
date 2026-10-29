@@ -798,6 +798,8 @@ export function initSections(el: HTMLElement): void {
   // the lines under each heading are written out when they scroll into view
   typeOnView([...root.querySelectorAll<HTMLElement>(".section-head > p:not(.eyebrow), .intro-lede")]);
   typeOnView([...root.querySelectorAll<HTMLElement>(".hero .lede")], 1300);
+  // and the text inside every card, step and answer as it comes into view
+  typeOnView([...root.querySelectorAll<HTMLElement>(".tile p:not([class]), .tier-card p:not([class]), .how-steps p:not([class]), .final p, .site-foot p")]);
   setupDemo();
   setupBuildDemo();
   root.querySelectorAll("[data-mark]").forEach((el) => el.replaceWith(focusMark(26)));

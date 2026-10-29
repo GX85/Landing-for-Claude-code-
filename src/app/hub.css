@@ -1467,3 +1467,160 @@ html.dark .app-root .md code {
 .think-hint {
   min-height: 5.6em;
 }
+
+/* ---------- a segmented control with a sliding highlight ---------- */
+.slide-seg {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(var(--n, 3), minmax(0, 1fr));
+  padding: 3px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 6%, transparent);
+}
+.slide-thumb {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: calc((100% - 6px) / var(--n, 3));
+  border-radius: 999px;
+  background: var(--ink);
+  transform: translateX(calc(var(--i, 0) * 100%));
+  transition: transform 0.42s cubic-bezier(0.34, 1.4, 0.4, 1);
+}
+.slide-seg button {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  height: 32px;
+  padding: 0 4px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--ink-3);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.3s ease;
+}
+.slide-seg button[aria-checked="true"] {
+  color: var(--bg);
+}
+.set-update {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+/* ======================================================================
+   Everything moves a little: messages arrive, menus open, cards lift, switches slide.
+   ====================================================================== */
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+}
+@keyframes slide-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  /* the newest messages slide up when a chat opens or a reply starts */
+  .app-root .msg:nth-last-child(-n + 3) {
+    animation: rise-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .app-root .msg.user .bubble,
+  .app-root .msg.user > div {
+    transform-origin: right bottom;
+  }
+  /* menus and popovers pop open, their rows follow in turn */
+  .app-root .popover {
+    animation: pop-in 0.26s cubic-bezier(0.22, 1.2, 0.36, 1) both;
+    transform-origin: bottom left;
+  }
+  .app-root .popover .menu-item,
+  .app-root .popover .ma-model-row {
+    animation: rise-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .app-root .popover .menu-item:nth-child(2) { animation-delay: 30ms; }
+  .app-root .popover .menu-item:nth-child(3) { animation-delay: 60ms; }
+  .app-root .popover .menu-item:nth-child(4) { animation-delay: 90ms; }
+  .app-root .popover .menu-item:nth-child(n + 5) { animation-delay: 120ms; }
+  /* suggestions under the greeting and the sidebar fade in one by one */
+  .app-root .suggestions > * {
+    animation: rise-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .app-root .suggestions > :nth-child(2) { animation-delay: 70ms; }
+  .app-root .suggestions > :nth-child(3) { animation-delay: 140ms; }
+  .app-root .suggestions > :nth-child(4) { animation-delay: 210ms; }
+  .app-root .side-nav > *,
+  .app-root .side-chats > * {
+    animation: slide-in-left 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .app-root .side-nav > :nth-child(2) { animation-delay: 40ms; }
+  .app-root .side-nav > :nth-child(3) { animation-delay: 80ms; }
+  .app-root .side-nav > :nth-child(4) { animation-delay: 120ms; }
+  .app-root .side-nav > :nth-child(5) { animation-delay: 160ms; }
+  .app-root .side-nav > :nth-child(n + 6) { animation-delay: 200ms; }
+  /* folded sections open with a short slide */
+  .app-root details[open] > :not(summary) {
+    animation: rise-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .app-root details > summary svg:last-child {
+    transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .app-root details[open] > summary svg:last-child {
+    transform: rotate(180deg);
+  }
+  /* cards and rows lift under a finger or cursor */
+  .app-root .card,
+  .app-root .ma-card,
+  .app-root .suggestion,
+  .app-root .ma-model-row,
+  .app-root .menu-item,
+  .app-root .chat-item {
+    transition:
+      transform 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 0.3s ease,
+      background-color 0.2s ease,
+      border-color 0.2s ease;
+  }
+  @media (hover: hover) {
+    .app-root .card:hover,
+    .app-root .ma-card:hover,
+    .app-root .suggestion:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 14px 30px -18px rgba(0, 0, 0, 0.6);
+    }
+  }
+  .app-root input,
+  .app-root textarea,
+  .app-root select {
+    transition: box-shadow 0.25s ease, border-color 0.25s ease, background-color 0.25s ease;
+  }
+  .app-root .switch::after {
+    transition: transform 0.35s cubic-bezier(0.34, 1.5, 0.4, 1);
+  }
+  .app-root .icon-btn {
+    transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1), background-color 0.2s ease;
+  }
+  .app-root .icon-btn:active {
+    transform: scale(0.9);
+  }
+  .app-root .send-btn {
+    transition: transform 0.25s cubic-bezier(0.34, 1.5, 0.4, 1), opacity 0.2s ease, background-color 0.2s ease;
+  }
+  .app-root .send-btn:not(:disabled):hover {
+    transform: scale(1.08);
+  }
+}

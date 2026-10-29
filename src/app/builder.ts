@@ -11,7 +11,7 @@ import type { ChatTurn } from "./api";
 import { closestGame, exampleGameJs, renderCustomGame, renderGame, type GameConfig } from "./templates/games";
 import { themeNames } from "./templates/kit";
 
-export type BuildKind = "presentation" | "game" | "website" | "app";
+export type BuildKind = "presentation" | "game" | "website" | "app" | "clip";
 
 export interface BuildCall {
   (system: string, messages: ChatTurn[], onText: (full: string) => void, maxTokens?: number): Promise<{ text: string }>;
@@ -21,6 +21,7 @@ const RX: Record<BuildKind, RegExp> = {
   presentation: /(презентац|слайд|presentation|\bslides?\b|slide ?deck|pitch ?deck|keynote|питч)/i,
   game: /(игр[уаыеой]|\bgame|\b3d\b|3д|тетрис|змейк|snake|tetris|platformer|платформер|шутер|shooter|\bpong\b|flappy|arkanoid|арканоид|гонк|racing)/i,
   website: /(сайт|лендинг|landing|website|web ?site|веб-?страниц|homepage|портфолио|portfolio|страниц[уа] для|web ?page)/i,
+  clip: /(видео|ролик|клип\b|анимаци|мультфильм|\bvideo\b|animated|animation|\bclip\b|motion graphic|cartoon|trailer|трейлер)/i,
   app: /(приложени|\bapp\b|application|калькулятор|calculator|\btodo\b|to-do|список дел|трекер|tracker|дашборд|dashboard|таймер|timer|конвертер|converter|редактор|editor|виджет|widget|pomodoro|помодоро)/i,
 };
 const VERB = /(сделай|создай|напиши|построй|сгенерируй|собери|сверстай|запили|накидай|придумай и сделай|\bmake\b|\bbuild\b|\bcreate\b|\bgenerate\b|\bdesign\b|\bcode\b|\bdevelop\b)/i;
@@ -30,7 +31,7 @@ const NOT_A_BUILD = /(объясни|расскажи|что такое|поче
 export function detectBuild(text: string): BuildKind | null {
   const t = text.slice(0, 800);
   if (!VERB.test(t) || NOT_A_BUILD.test(t)) return null;
-  for (const kind of ["presentation", "game", "website", "app"] as BuildKind[]) if (RX[kind].test(t)) return kind;
+  for (const kind of ["presentation", "game", "website", "app", "clip"] as BuildKind[]) if (RX[kind].test(t)) return kind;
   return null;
 }
 
@@ -39,6 +40,7 @@ const LABEL: Record<BuildKind, [string, string]> = {
   game: ["game", "игру"],
   website: ["website", "сайт"],
   app: ["app", "приложение"],
+  clip: ["animated clip", "анимированный ролик"],
 };
 
 /* ---------- prompts ---------- */
@@ -57,6 +59,7 @@ Hard rules:
 const KIND_RULES: Record<Exclude<BuildKind, "presentation">, string> = {
   game: `Game requirements: a title screen with a Start button and a controls hint; score and a best score saved in localStorage; a game-over screen with Restart; difficulty that ramps up; a requestAnimationFrame loop using delta time; a canvas that fills the window and handles resize and devicePixelRatio; pause when the tab is hidden. Add juice: particles, easing, a little screen shake. On touch screens show on-screen buttons or use swipes. For 3D use three.js r128 with lights, fog and simple procedural low-poly geometry, and keep it smooth on phones.`,
   website: `Website requirements: a complete page with a sticky nav (and a mobile menu), a hero with a strong headline and call to action, 3 to 5 content sections (for example features, how it works, testimonials or pricing, FAQ) and a footer. Specific, persuasive copy for this exact business, never lorem ipsum. Use CSS gradients, inline SVG and emoji instead of image files. Smooth scrolling and gentle reveal-on-scroll animations.`,
+  clip: `Clip requirements: a short animated film, 8 to 12 seconds, that starts playing the moment the page opens and loops. Draw it on a canvas that fills the window (handle resize and devicePixelRatio), driven by one requestAnimationFrame timeline with easing. Tell a tiny story in three beats (setup, change, payoff) with cinematic composition: layered parallax, a moving camera (slow zoom or pan), glow, particles, gradients and one short on-screen title or caption that fades in and out. Colour and mood must match the request. No buttons or controls, no audio, nothing to click.`,
   app: `App requirements: every feature actually works; state is saved in localStorage; friendly empty states; input validation; keyboard shortcuts where natural; accessible labels. An app-like layout that fits a phone screen and scales up nicely.`,
 };
 

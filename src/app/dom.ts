@@ -85,3 +85,33 @@ export function pageHead(title: Node | string, ...actions: (Node | null | false)
     h("div", { class: "head-actions" }, ...actions, themeButton("icon-btn")),
   );
 }
+
+/** A segmented control whose highlight slides to the chosen option instead of jumping. */
+export function slideSeg<T extends string>(items: { value: T; label: string }[], value: T, onChange: (v: T) => void, label: string): HTMLElement {
+  const root = h("div", { class: "slide-seg", role: "radiogroup", "aria-label": label });
+  root.style.setProperty("--n", String(items.length));
+  const set = (v: T) => {
+    root.style.setProperty("--i", String(Math.max(0, items.findIndex((i) => i.value === v))));
+    for (const b of root.querySelectorAll<HTMLElement>("button")) b.setAttribute("aria-checked", String(b.dataset.v === v));
+  };
+  root.append(
+    h("span", { class: "slide-thumb", "aria-hidden": "true" }),
+    ...items.map((i) =>
+      h(
+        "button",
+        {
+          type: "button",
+          role: "radio",
+          "data-v": i.value,
+          onclick: () => {
+            set(i.value);
+            onChange(i.value);
+          },
+        },
+        i.label,
+      ),
+    ),
+  );
+  set(value);
+  return root;
+}

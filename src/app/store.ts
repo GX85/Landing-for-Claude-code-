@@ -13,6 +13,7 @@ export type Provider =
   | "webhook"
   | "luma"
   | "replicate"
+  | "higgsfield"
   | "manus"
   | "jules"
   | "devin"
@@ -379,13 +380,13 @@ export const PROVIDERS: Record<Provider, ProviderInfo> = {
     label: "Focus (free)",
     group: "free",
     agentName: "Focus",
-    kinds: ["chat", "image"],
-    models: { chat: "llm7/nemotron-3-nano:30b", image: "" },
+    kinds: ["chat", "image", "video"],
+    models: { chat: "llm7/nemotron-3-nano:30b", image: "", video: "" },
     keyPlaceholder: "",
     needsKey: false,
     needsUrl: false,
     builtIn: true,
-    hint: "Built in and free: no key, no sign-up. Pick a free model on the Agents page — NVIDIA Nemotron 3 Nano, MiniMax, Mistral, GPT-OSS or Codestral; they run straight from your browser with a fair-use limit. Focus Image makes one free picture every 45 seconds. Free models can't see attached images.",
+    hint: "Built in and free: no key, no sign-up. Pick a free model on the Agents page — NVIDIA Nemotron 3 Nano, MiniMax, Mistral, GPT-OSS or Codestral; they run straight from your browser with a fair-use limit. Focus Image makes free pictures and Focus Video writes a short animated film that plays right in the chat. Free models can't see attached images.",
     color: "#1d1d1d",
   },
   openrouter: {
@@ -529,6 +530,21 @@ export const PROVIDERS: Record<Provider, ProviderInfo> = {
     needsKey: true,
     needsUrl: false,
     color: "#111827",
+  },
+  higgsfield: {
+    label: "Higgsfield",
+    group: "media",
+    agentName: "Higgsfield",
+    kinds: ["image", "video"],
+    models: { image: "higgsfield-ai/soul/v2/standard", video: "" },
+    keyPlaceholder: "KEY_ID:KEY_SECRET",
+    keyUrl: "https://console.higgsfield.ai",
+    needsKey: true,
+    needsUrl: false,
+    modelLabel: "Model path",
+    needsModel: true,
+    hint: "Cinematic images and video. Paste your key as KEY_ID:KEY_SECRET from console.higgsfield.ai, and set the model path shown on the model's page there (for images: higgsfield-ai/soul/v2/standard).",
+    color: "#c6ff3d",
   },
   replicate: {
     label: "Replicate",
@@ -833,13 +849,13 @@ export function newAgent(connection: Connection, kind?: AgentKind): Agent {
   };
 }
 
-const STATE_VERSION = 6;
+const STATE_VERSION = 7;
 
 /** The Aeronus team out of the box: every one needs the user's own key. */
-const TEAM_PROVIDERS: Provider[] = ["anthropic", "openai", "gemini", "xai", "mistral", "qwen", "devin", "manus", "jules"];
+const TEAM_PROVIDERS: Provider[] = ["anthropic", "openai", "gemini", "xai", "mistral", "qwen", "devin", "manus", "jules", "higgsfield", "luma", "replicate"];
 
 function focusAgents(focus: Connection): Agent[] {
-  return [newAgent(focus, "chat"), { ...newAgent(focus, "image"), name: "Focus Image" }];
+  return [newAgent(focus, "chat"), { ...newAgent(focus, "image"), name: "Focus Image" }, { ...newAgent(focus, "video"), name: "Focus Video" }];
 }
 
 function defaults(): State {
@@ -851,7 +867,7 @@ function defaults(): State {
     agents,
     chats: [],
     // works right away: a one-on-one chat with the free model
-    config: { hub: "focus", tier: "gen", mode: "solo", agentIds: agents.filter((a) => a.kind === "chat").map((a) => a.id), leadId: agents[0].id, rounds: 2 },
+    config: { hub: "focus", tier: "gen", mode: "solo", agentIds: agents.filter((a) => a.kind === "chat" || a.connectionId === focus.id).map((a) => a.id), leadId: agents[0].id, rounds: 2 },
     sidebarCollapsed: false,
     skills: [],
     sound: true,
@@ -899,6 +915,12 @@ function upgrade(state: State): State {
   // v6: agents built in Focus
   state.focusAgents ??= [];
   state.settings ??= defaultSettings();
+  // v7: Focus Video, and the picture and video generators join the Aeronus team
+  const focusConn = state.connections.find((c) => c.provider === "focus");
+  if (focusConn && !state.agents.some((a) => a.connectionId === focusConn.id && a.kind === "video")) state.agents.push({ ...newAgent(focusConn, "video"), name: "Focus Video" });
+  for (const a of state.agents) {
+    if ((a.kind === "image" || a.kind === "video") && focusIds.has(a.connectionId) && !state.config.agentIds.includes(a.id)) state.config.agentIds.push(a.id);
+  }
   state.version = STATE_VERSION;
   return state;
 }

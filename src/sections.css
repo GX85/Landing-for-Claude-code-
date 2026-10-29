@@ -2303,8 +2303,7 @@
 /* four soft blobs of the island's sunset; they swell in while the wordmark opens, then keep drifting.
    Only transform and opacity move, so it stays on the GPU even on a phone. */
 .aurora {
-  /* fixed: the colour follows you down the whole page, not just the first screen */
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: 0;
   overflow: hidden;
@@ -2414,5 +2413,31 @@ html.light .aurora i {
 @keyframes tw-blink {
   50% {
     opacity: 0;
+  }
+}
+
+/* ---------- landing: cards lift, buttons answer, rows slide ---------- */
+@media (prefers-reduced-motion: no-preference) {
+  .landing .cta,
+  .landing .nav-app,
+  .landing .nav a {
+    transition: transform 0.25s cubic-bezier(0.34, 1.5, 0.4, 1), background-color 0.25s ease, color 0.25s ease;
+  }
+  .landing .cta:active,
+  .landing .nav-app:active {
+    transform: scale(0.95);
+  }
+  .landing .qa-body {
+    animation: tw-rise 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .landing details[open] > summary svg,
+  .landing details > summary svg {
+    transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+}
+@keyframes tw-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
   }
 }
