@@ -53,6 +53,7 @@ Hard rules:
 - Everything inline: CSS in <style>, JavaScript in <script>. No build step, no ES modules or imports, no external images, fonts or files. The ONE allowed external file is three.js r128 for 3D: <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script> (use the global THREE; no OrbitControls or other add-ons, write your own controls).
 - It must run with zero errors on the first try: declare every variable, check elements exist, no unfinished code, no "TODO", no "add more here", no placeholder text.
 - Works on phones and desktops: responsive layout and touch controls as well as keyboard and mouse.
+- The page runs in a sandbox where reading localStorage or sessionStorage throws a SecurityError: wrap every use in try/catch and fall back to a plain variable.
 - All visible text in the user's language.
 - Make it look designed, not like a tutorial: a coherent colour palette, a system font stack with real hierarchy, generous spacing, soft shadows, smooth transitions.`;
 

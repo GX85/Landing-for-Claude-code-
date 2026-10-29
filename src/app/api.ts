@@ -371,7 +371,7 @@ async function callTier(spec: string, agent: Agent, conn: Connection, system: st
   const ask = messages.at(-1)?.content ?? "";
   // a new build request, or a change to the thing built in the previous answer
   const previous = /<!--\s*focus:preview kind=(\w+)/.exec([...messages].reverse().find((m) => m.role === "assistant")?.content ?? "")?.[1] as BuildKind | undefined;
-  const kind = detectBuild(ask) ?? (previous && ask.length < 600 && !/\?\s*$/.test(ask) ? previous : null);
+  const kind = (agent.create && agent.create !== "image" && agent.create !== "video" ? (agent.create as BuildKind) : null) ?? detectBuild(ask) ?? (previous && ask.length < 600 && !/\?\s*$/.test(ask) ? previous : null);
   const chosen = Number(levelText) as ThinkLevel;
   const level = LEVEL[chosen >= 1 && chosen <= 4 ? (chosen as 1 | 2 | 3 | 4) : autoLevel(ask)];
 
@@ -525,9 +525,27 @@ async function focusClip(agent: Agent, conn: Connection, prompt: string, signal:
   return { text, model: "Focus Video · animated clip" };
 }
 
+/** A short idea becomes a rich prompt (subject, light, lens, mood, style): free image models answer detail with detail. */
+async function enhanceImagePrompt(agent: Agent, conn: Connection, idea: string, signal: AbortSignal): Promise<string> {
+  const system = "You write prompts for an image generator. Rewrite the user's idea as ONE vivid, detailed prompt in English, 35 to 70 words: the subject, setting, composition, lighting, camera and lens, mood, style and colour palette. Keep what the user asked for and invent only supporting detail. Reply with the prompt only: no preamble, no quotes, no lists.";
+  try {
+    const r = await chainCall(tierModels("gen"), { ...agent, kind: "chat", effort: "" }, conn, system, [{ role: "user", content: idea }], signal, () => undefined, { maxTokens: 220, firstTokenMs: 12000, totalMs: 25000 });
+    const text = r.text.replace(/^["'“«\s]+|["'”»\s]+$/g, "").trim();
+    return text.length > 20 && text.length < 1200 ? text : idea;
+  } catch {
+    if (signal.aborted) throw new DOMException("Stopped", "AbortError");
+    return idea;
+  }
+}
+
 /** Runs a media or agent job: starts it, then polls until it finishes. */
 export async function runJob(agent: Agent, conn: Connection, prompt: string, images: ImagePart[], signal: AbortSignal, onProgress: (status: string) => void): Promise<CallResult> {
   if (conn.provider === "focus" && agent.kind === "video") return focusClip(agent, conn, prompt, signal, onProgress);
+  if (conn.provider === "focus" && agent.kind === "image") {
+    onProgress("Polishing your prompt…");
+    prompt = await enhanceImagePrompt(agent, conn, prompt, signal);
+    onProgress("Painting…");
+  }
   const post = async (body: object): Promise<JobResponse> => {
     const res = await fetch("/api/job", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ agent: agentPayload(agent, conn), ...body }), signal });
     if (!res.ok) throw await errorFrom(res);

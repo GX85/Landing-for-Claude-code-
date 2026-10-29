@@ -9,7 +9,7 @@ import { click, setSound } from "./sound";
 import { agentAvatar, applyHub, focusMark } from "./brand";
 import { agentMascot } from "../mascot";
 import { typeInto as handWrite, typePlaceholder } from "./typing";
-import { allSkills, choiceModel, connectionOf, isReady, KIND_LABEL, missing, newConnection, PERSONA, PROVIDERS, TIER_ORDER, TIERS, uid, type Agent, type Attachment, type Chat, type ChatConfig, type FocusAgent, type Hub, type Message, type StepRecord, type Tier } from "./store";
+import { allSkills, choiceModel, connectionOf, isReady, KIND_LABEL, missing, newConnection, PERSONA, PROVIDERS, TIER_ORDER, TIERS, uid, type Agent, type Attachment, type Chat, type ChatConfig, type CreateKind, type FocusAgent, type Hub, type Message, type StepRecord, type Tier } from "./store";
 
 const SCENE_VIDEO = "https://d2ol7oe51mr4n9.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/175fbbcd-e50a-480c-bab2-ca16d4678322.mp4";
 const SCENE_POSTER = "https://d2ol7oe51mr4n9.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/726b168c-da47-4682-a255-cc3e02f89bae.jpg";
@@ -180,6 +180,18 @@ const TIER_SUGGESTIONS: Record<Tier, string[]> = {
   clorus: ["Build a snake game I can play right here.", "Make a six-slide pitch deck for a coffee subscription.", "Create a landing page for a yoga studio.", "Build a pomodoro timer app with a dark theme."],
 };
 
+/** What can be made from the + menu or the start screen. */
+const CREATE: { kind: CreateKind; name: string; hint: string; icon: string; ask: string }[] = [
+  { kind: "game", name: "Game", hint: "Playable right in the chat", icon: "modes", ask: "Describe the game…" },
+  { kind: "presentation", name: "Presentation", hint: "A designed slide deck", icon: "file", ask: "What is the presentation about?" },
+  { kind: "image", name: "Image", hint: "A picture from your words", icon: "image", ask: "Describe the picture…" },
+  { kind: "video", name: "Video", hint: "A short animated film", icon: "video", ask: "Describe the video…" },
+  { kind: "website", name: "Website", hint: "A complete page", icon: "council", ask: "What is the website for?" },
+  { kind: "app", name: "App", hint: "A working tool", icon: "planner", ask: "What should the app do?" },
+];
+
+let setCreateRef: ((k: CreateKind) => void) | undefined;
+
 function fillInput(main: HTMLElement, text: string): void {
   const input = main.querySelector<HTMLTextAreaElement>(".composer textarea");
   if (!input) return;
@@ -198,14 +210,17 @@ function suggestionsFor(ctx: Ctx, config: ChatConfig, main: HTMLElement, chat: C
     );
   }
   if (hubOf(config) === "focus") {
-    return TIER_SUGGESTIONS[config.tier].map((text) =>
+    return [
+      h("div", { class: "create-row" }, ...CREATE.map((c) => h("button", { class: "create-chip", type: "button", onclick: () => setCreateRef?.(c.kind) }, icon(c.icon, 15), h("span", {}, c.name)))),
+      ...TIER_SUGGESTIONS[config.tier].map((text) =>
       h(
         "button",
         { class: "suggestion", type: "button", onclick: () => fillInput(main, text) },
         h("span", { class: `suggestion-mode tier-${config.tier}` }, TIERS[config.tier].name),
         h("span", {}, text),
       ),
-    );
+    ),
+    ];
   }
   if (!ctx.state.agents.some((a) => isReady(ctx.state, a))) {
     return [
@@ -291,6 +306,12 @@ function builtAgent(ctx: Ctx, fa: FocusAgent): Agent {
     prefer: fa.model || undefined,
     temperature: Math.round((0.2 + fa.creativity * 1.0) * 100) / 100,
   };
+}
+
+/** The generator that makes pictures or video: one with the user's own key if there is one, else Focus's free one. */
+function generatorAgent(ctx: Ctx, kind: "image" | "video"): Agent | undefined {
+  const ready = ctx.state.agents.filter((a) => a.kind === kind && a.enabled && !missing(ctx.state, a));
+  return ready.find((a) => connectionOf(ctx.state, a)?.provider !== "focus") ?? ready[0];
 }
 
 /** Focus chats run one assistant per tier; it is made on the fly and never listed on the Agents page. */
@@ -710,14 +731,18 @@ async function runTurn(ctx: Ctx, chat: Chat, userMsg: Message): Promise<void> {
   // Focus: one assistant per tier. Aeronus (and chats from before hubs existed): the whole team.
   const focusHub = chat.config.hub === "focus";
   const built = focusHub ? focusAgentOf(ctx, chat.config) : undefined;
-  const tier = built ? builtAgent(ctx, built) : focusHub ? tierAgent(ctx, chat.config.tier, chat.config.think ?? 0) : undefined;
+  const create = userMsg.create;
+  // pictures and video go to a generator; games, decks, sites and apps force the Builder on the chat model
+  const media = create === "image" || create === "video" ? generatorAgent(ctx, create) : undefined;
+  const base = built ? builtAgent(ctx, built) : focusHub ? tierAgent(ctx, chat.config.tier, chat.config.think ?? 0) : undefined;
+  const tier = media ?? (base && create ? { ...base, create } : base);
   // Aeronus: the model chosen in Settings answers for every member that runs on Focus's own connection
   const hubModel = tier ? undefined : choiceModel(ctx.state.settings.aeronus);
   const withHubModel = (a: Agent): Agent => (hubModel && a.kind === "chat" && connectionOf(ctx.state, a)?.provider === "focus" ? { ...a, model: hubModel } : a);
   const team = tier ? [tier] : teamOf(ctx, chat.config).map(withHubModel);
   const lead0 = tier ? undefined : leadOf(ctx, chat.config, teamOf(ctx, chat.config));
   const lead = tier ?? (lead0 ? withHubModel(lead0) : undefined);
-  const mode = focusHub ? "solo" : chat.config.mode;
+  const mode = focusHub || media ? "solo" : chat.config.mode;
   const agents = mode === "solo" && lead ? [lead] : team;
   const m: Message = { id: uid(), role: "assistant", content: "", mode, status: "running", steps: [], createdAt: Date.now() };
   chat.messages.push(m);
@@ -779,7 +804,7 @@ async function runTurn(ctx: Ctx, chat: Chat, userMsg: Message): Promise<void> {
   updateComposer(chat.id);
 }
 
-function send(ctx: Ctx, chat: Chat | undefined, text: string): void {
+function send(ctx: Ctx, chat: Chat | undefined, text: string, create?: CreateKind): void {
   const attachments = pendingAttachments;
   pendingAttachments = [];
   if (!chat) {
@@ -793,14 +818,14 @@ function send(ctx: Ctx, chat: Chat | undefined, text: string): void {
     };
     draft = undefined;
     ctx.state.chats.unshift(chat);
-    const user: Message = { id: uid(), role: "user", content: text, attachments, createdAt: Date.now() };
+    const user: Message = { id: uid(), role: "user", content: text, attachments, create, createdAt: Date.now() };
     chat.messages.push(user);
     ctx.persist();
     ctx.go({ name: "chat", id: chat.id });
     void runTurn(ctx, chat, user);
     return;
   }
-  const user: Message = { id: uid(), role: "user", content: text, attachments, createdAt: Date.now() };
+  const user: Message = { id: uid(), role: "user", content: text, attachments, create, createdAt: Date.now() };
   chat.messages.push(user);
   view?.list.append(messageEl(ctx, chat, user));
   void runTurn(ctx, chat, user);
@@ -983,7 +1008,11 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onH
     renderFiles();
     sync();
     closePopover();
-    send(ctx, chat, text);
+    const made = create;
+    create = undefined;
+    paintCreate();
+    renderBar();
+    send(ctx, chat, text, made);
     renderFiles();
   };
 
@@ -1089,6 +1118,50 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onH
   };
   const agentChip = h("button", { class: "chip-btn agent-chip", type: "button", "data-popover": "agent", "aria-haspopup": "dialog", title: "Talk to Focus or one of your agents", onclick: (e: Event) => openPopover(e.currentTarget as HTMLElement, agentMenu()) });
 
+  // the + menu: attach files, or ask Focus to make something
+  let create: CreateKind | undefined;
+  const createPill = h("div", { class: "create-pill", hidden: true });
+  const paintCreate = () => {
+    const c = CREATE.find((x) => x.kind === create);
+    createPill.hidden = !c;
+    createPill.replaceChildren(
+      ...(c ? [icon(c.icon, 14), h("span", {}, `Create · ${c.name}`), h("button", { type: "button", "aria-label": "Cancel", onclick: () => ((create = undefined), paintCreate(), renderBar()) }, icon("close", 13))] : []),
+    );
+    createPill.classList.toggle("on", !!c);
+  };
+  setCreateRef = (k) => {
+    create = k;
+    paintCreate();
+    renderBar();
+    input.focus();
+  };
+  const plusMenu = () =>
+    h(
+      "div",
+      { class: "menu plus-menu" },
+      h("button", { class: "menu-item", type: "button", onclick: () => (closePopover(), fileInput.click()) }, icon("clip", 18), h("span", { class: "menu-text" }, h("strong", {}, "Attach files"), h("small", {}, "Photos, PDFs and text files"))),
+      h("div", { class: "menu-title" }, "Create"),
+      ...CREATE.filter((c) => hubOf(config) === "focus" || c.kind === "image" || c.kind === "video").map((c) =>
+        h(
+          "button",
+          {
+            class: `menu-item${create === c.kind ? " selected" : ""}`,
+            type: "button",
+            onclick: () => {
+              create = create === c.kind ? undefined : c.kind;
+              paintCreate();
+              renderBar();
+              closePopover();
+              input.focus();
+            },
+          },
+          icon(c.icon, 18),
+          h("span", { class: "menu-text" }, h("strong", {}, c.name), h("small", {}, c.hint)),
+          create === c.kind ? icon("check", 16) : null,
+        ),
+      ),
+    );
+
   const renderBar = () => {
     const hub = hubOf(config);
     const fa = hub === "focus" ? focusAgentOf(ctx, config) : undefined;
@@ -1102,7 +1175,7 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onH
     tierSeg.dataset.tier = config.tier;
     for (const b of hubSwitch.querySelectorAll<HTMLElement>(".hub-opt")) b.setAttribute("aria-checked", String(b.dataset.hub === hub));
     for (const b of tierSeg.querySelectorAll<HTMLElement>(".tier-opt")) b.setAttribute("aria-checked", String(b.dataset.tier === config.tier));
-    void typePlaceholder(input, hub === "focus" ? `Ask ${fa ? fa.name || "your agent" : TIERS[config.tier].name}…` : "Message your team…");
+    void typePlaceholder(input, create ? CREATE.find((c) => c.kind === create)!.ask : hub === "focus" ? `Ask ${fa ? fa.name || "your agent" : TIERS[config.tier].name}…` : "Message your team…");
     void handWrite(caption, captionFor(ctx, config, hub, fa));
     opts.replaceChildren(
       ...(hub === "focus"
@@ -1133,7 +1206,7 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onH
     }
     shownHub = hub;
     bar.replaceChildren(
-      h("button", { class: "chip-btn icon-only", type: "button", title: "Attach images, PDFs or text files", "aria-label": "Attach files", onclick: () => fileInput.click() }, icon("clip")),
+      h("button", { class: "chip-btn icon-only", type: "button", "data-popover": "plus", "aria-haspopup": "dialog", title: "Attach files or create something", "aria-label": "Attach files or create", onclick: (e: Event) => openPopover(e.currentTarget as HTMLElement, plusMenu()) }, icon("plus")),
       hubSwitch,
       ...(hub === "focus" && !fa ? [thinkChip] : []),
       opts,
@@ -1293,7 +1366,7 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onH
   renderBar();
   sync();
   renderFiles();
-  const composer = h("div", { class: "composer" }, files, input, caption, bar, fileInput);
+  const composer = h("div", { class: "composer" }, createPill, files, input, caption, bar, fileInput);
   composer.addEventListener("dragover", (e) => {
     e.preventDefault();
     composer.classList.add("drop");

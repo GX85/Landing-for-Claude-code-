@@ -95,6 +95,8 @@ export interface Agent {
   avatar: string;
   /** Focus agents: an OpenRouter model to try before the tier's own. */
   prefer?: string;
+  /** Forces the Builder for this agent's next answer (game, presentation, website or app). */
+  create?: CreateKind;
   /** Focus agents: sampling temperature. */
   temperature?: number;
 }
@@ -243,6 +245,9 @@ export const BUILTIN_SKILLS: Skill[] = [
 export type Hub = "focus" | "aeronus";
 export type Tier = "storm" | "gen" | "clorus";
 
+/** What a message asks Focus to make, chosen from the + menu. */
+export type CreateKind = "game" | "presentation" | "website" | "app" | "image" | "video";
+
 export interface ChatConfig {
   hub: Hub;
   tier: Tier;
@@ -297,6 +302,8 @@ export interface Message {
   /** For assistant messages: the final answer, which later turns see as history. */
   content: string;
   attachments?: Attachment[];
+  /** Set when the message was sent from the + menu's Create list. */
+  create?: CreateKind;
   mode?: ModeId;
   status?: "running" | "done" | "error" | "stopped";
   error?: string;
