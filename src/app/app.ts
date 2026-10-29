@@ -1,3 +1,4 @@
+import { trackViewport } from "./viewport";
 import { signedInUser, signOut } from "./signin";
 import { renderMyAgents } from "./myagents";
 import { applyHub, focusMark } from "./brand";
@@ -59,6 +60,7 @@ function navLink(label: string, iconName: string, to: Route, active: boolean): H
 
 function mount(el: HTMLElement): void {
   root = el;
+  trackViewport(el);
   searchInput = h("input", { type: "search", placeholder: "Search chats", "aria-label": "Search chats", oninput: () => renderChats() });
   chatsEl = h("div", { class: "side-chats" });
   footEl = h("div", { class: "side-foot" });

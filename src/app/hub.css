@@ -1237,3 +1237,14 @@ html.dark .app-root .md code {
     position: static;
   }
 }
+
+/* phones: the app follows the visible area, so the keyboard never leaves a gap or pushes the header away */
+@media (hover: none) {
+  .app-root {
+    inset: auto;
+    left: 0;
+    right: 0;
+    top: var(--vvt, 0px);
+    height: var(--vvh, 100dvh);
+  }
+}
