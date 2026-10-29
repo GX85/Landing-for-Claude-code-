@@ -887,6 +887,14 @@ html.dark .app-root .md code {
   .app-root .side {
     background: var(--side);
   }
+  /* the top bar and its buttons must hide the messages that scroll under them */
+  .app-root .main-head {
+    background: linear-gradient(to bottom, var(--bg) 75%, transparent);
+  }
+  .app-root .head-actions .icon-btn,
+  .app-root .head-left .icon-btn {
+    background: var(--card);
+  }
   html.dark .app-root .composer,
   html.dark .app-root .composer-dock .composer {
     background: #18181c;

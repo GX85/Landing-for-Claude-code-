@@ -438,29 +438,42 @@ async function buildGame(messages: ChatTurn[], call: BuildCall, onText: (full: s
   const system = `${ENGINE_DOC.replace("${THEMES}", themeNames.join(", "))}\n\nHere is a complete, working example game for this engine. Use it to see how the API is used; write your own game for the user's request, not a copy:\n\`\`\`js\n${exampleGameJs(closest)}\n\`\`\``;
   const status = (en: string, rus: string, body = "") => onText(`*${say(en, rus)}*${body ? `\n\n${body}` : ""}`);
 
-  status("Designing your game…", "Придумываю игру…");
-  let reply = await call(system, messages, (t) => status("Writing your game…", "Пишу игру…", t), 16000);
-  let parsed = parseGameReply(reply.text);
-  let cfg: GameConfig = { lang: ru ? "ru" : "en", ...(parsed?.cfg ?? {}), template: "custom" };
-  let html = parsed ? renderCustomGame(cfg, parsed.js) : "";
-  let errors = html ? await validateHtml(html, 3600) : ["No game code came back."];
+  let reply = { text: "" };
+  let parsed: ReturnType<typeof parseGameReply> = null;
+  let cfg: GameConfig = { lang: ru ? "ru" : "en", template: "custom" };
+  let html = "";
+  let errors: string[] = ["No game code came back."];
+  let unreachable = false;
+  try {
+    status("Designing your game…", "Придумываю игру…");
+    reply = await call(system, messages, (t) => status("Writing your game…", "Пишу игру…", t), 16000);
+    parsed = parseGameReply(reply.text);
+    cfg = { lang: ru ? "ru" : "en", ...(parsed?.cfg ?? {}), template: "custom" };
+    html = parsed ? renderCustomGame(cfg, parsed.js) : "";
+    errors = html ? await validateHtml(html, 3600) : ["No game code came back."];
 
-  for (let round = 0; round < 2 && errors.length && !signal.aborted; round++) {
-    status(`Testing found ${errors.length} problem${errors.length > 1 ? "s" : ""}, fixing…`, `При тесте нашёл ошибки (${errors.length}), исправляю…`);
-    const previous = parsed ? "```json\n" + JSON.stringify(cfg) + "\n```\n```js\n" + parsed.js + "\n```" : reply.text.slice(0, 6000);
-    reply = await call(
-      system,
-      [...messages, { role: "assistant", content: previous }, { role: "user", content: `I ran it in the engine and got:\n${errors.map((e) => `- ${e}`).join("\n")}\n\nFind the cause and fix it. Reply again in the exact format: the json block, then the complete fixed js function.` }],
-      (t) => status("Fixing…", "Исправляю…", t),
-      16000,
-    );
-    const next = parseGameReply(reply.text);
-    if (next) {
-      parsed = next;
-      cfg = { ...cfg, ...next.cfg, template: "custom" };
-      html = renderCustomGame(cfg, next.js);
-      errors = await validateHtml(html, 3600);
+    for (let round = 0; round < 2 && errors.length && !signal.aborted; round++) {
+      status(`Testing found ${errors.length} problem${errors.length > 1 ? "s" : ""}, fixing…`, `При тесте нашёл ошибки (${errors.length}), исправляю…`);
+      const previous = parsed ? "```json\n" + JSON.stringify(cfg) + "\n```\n```js\n" + parsed.js + "\n```" : reply.text.slice(0, 6000);
+      reply = await call(
+        system,
+        [...messages, { role: "assistant", content: previous }, { role: "user", content: `I ran it in the engine and got:\n${errors.map((e) => `- ${e}`).join("\n")}\n\nFind the cause and fix it. Reply again in the exact format: the json block, then the complete fixed js function.` }],
+        (t) => status("Fixing…", "Исправляю…", t),
+        16000,
+      );
+      const next = parseGameReply(reply.text);
+      if (next) {
+        parsed = next;
+        cfg = { ...cfg, ...next.cfg, template: "custom" };
+        html = renderCustomGame(cfg, next.js);
+        errors = await validateHtml(html, 3600);
+      }
     }
+
+  } catch (err) {
+    // the free models were all unavailable: don't leave the person with an error, hand over a ready game
+    if (signal.aborted) throw err;
+    unreachable = true;
   }
 
   if (!errors.length && html) {
@@ -468,5 +481,8 @@ async function buildGame(messages: ChatTurn[], call: BuildCall, onText: (full: s
   }
   // the model's own version wouldn't run: hand over the closest polished game, themed to the request
   const fallback = renderGame({ ...cfg, template: closest });
+  if (unreachable) {
+    return `${say("The AI models were busy and didn't answer, so here's a ready, tested game instead:", "ИИ-модели сейчас заняты и не ответили, поэтому вот готовая проверенная игра:")} **${closest}**. ${say("Ask again in a minute and I'll write one made for your request.", "Попроси ещё раз через минуту, и я напишу игру именно под твой запрос.")}\n\n\`\`\`html\n<!-- focus:preview kind=game -->\n${fallback}\n\`\`\``;
+  }
   return `${say("My own version of this game kept crashing in testing, so here's a polished, tested", "Моя версия игры под этот запрос падала при тестах, поэтому вот готовая проверенная игра в стиле запроса:")} **${cfg.title ?? closest}**${say(" in the same spirit.", ".")} ${say("Ask again and I'll try writing it from scratch once more.", "Попроси ещё раз, и я снова попробую написать её с нуля.")}\n\n\`\`\`html\n<!-- focus:preview kind=game -->\n${fallback}\n\`\`\``;
 }
