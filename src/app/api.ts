@@ -1,4 +1,4 @@
-import { PROVIDERS, type Agent, type AgentKind, type Connection } from "./store";
+import { PROVIDERS, TIERS, type Agent, type AgentKind, type Connection, type Tier } from "./store";
 
 export interface ImagePart {
   mediaType: string;
@@ -157,6 +157,29 @@ async function callInArtifact(agent: Agent, system: string, messages: ChatTurn[]
   }
 }
 
+let serverOpenRouter: boolean | undefined;
+
+/** A Focus tier: tries its OpenRouter models, then keyless free ones, until one answers. */
+async function callTier(tier: Tier, agent: Agent, conn: Connection, system: string, messages: ChatTurn[], signal: AbortSignal, onText: (full: string) => void): Promise<CallResult> {
+  const t = TIERS[tier];
+  const own = userConnections.some((c) => c.provider === "openrouter" && c.apiKey);
+  const attempts = [...(own || serverOpenRouter !== false ? t.or.slice(0, 2).map((m) => `openrouter/${m}`) : []), ...t.free];
+  let last: unknown;
+  for (const model of attempts) {
+    try {
+      onText("");
+      const r = await callAgent({ ...agent, model }, conn, system, messages, signal, onText);
+      return { ...r, model: `${model.replace(/^(openrouter|llm7|pollinations)\//, "").replace(/:free$/, "")}` };
+    } catch (error) {
+      if (signal.aborted) throw error;
+      last = error;
+      // the server has no OpenRouter key: stop asking it for the rest of this visit
+      if (model.startsWith("openrouter/") && !own && /FOCUS_OPENROUTER_KEY|needs Focus/.test(String((error as Error).message))) serverOpenRouter = false;
+    }
+  }
+  throw last instanceof Error ? last : new Error("No free model answered. Try again in a minute.");
+}
+
 /** Calls one chat agent and streams its text into `onText`. */
 export async function callAgent(
   agent: Agent,
@@ -168,6 +191,7 @@ export async function callAgent(
 ): Promise<CallResult> {
   if (import.meta.env.VITE_ARTIFACT === "1") return callInArtifact(agent, system, messages, signal, onText);
   if (conn.provider === "ollama") return callOllama(agent, conn, system, messages, signal, onText);
+  if (agent.model.startsWith("tier:")) return callTier(agent.model.slice(5) as Tier, agent, conn, system, messages, signal, onText);
   if (conn.provider === "focus" && agent.model.startsWith("openrouter/")) {
     const own = userConnections.find((c) => c.provider === "openrouter" && c.apiKey);
     if (own) return callAgent({ ...agent, model: agent.model.slice("openrouter/".length) }, own, system, messages, signal, onText);

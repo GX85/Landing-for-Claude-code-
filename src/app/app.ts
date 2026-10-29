@@ -1,5 +1,8 @@
 import { signedInUser, signOut } from "./signin";
+import { applyHub, focusMark } from "./brand";
 import "./app.css";
+import "./hub.css";
+import "@fontsource/playfair-display/latin-900.css";
 import type { Route } from "../router";
 import { renderChat, isRunning } from "./chat";
 import { h, icon, relativeDay } from "./dom";
@@ -123,6 +126,7 @@ function renderSidebar(): void {
             ctx.go({ name: "landing" });
           },
         },
+        focusMark(22),
         "Focus",
       ),
       h("button", { class: "icon-btn", type: "button", title: "Close sidebar", "aria-label": "Close sidebar", onclick: toggleSidebar }, icon("sidebar")),
@@ -244,6 +248,7 @@ export function show(el: HTMLElement, route: Route, go: Go): void {
   ctx.go = go;
   ctx.route = route;
   renderSidebar();
+  applyHub(state.config.hub ?? "focus");
   main.scrollTop = 0;
   switch (route.name) {
     case "agents":

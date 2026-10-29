@@ -34,9 +34,54 @@ export function renderMarkdown(el: HTMLElement, source: string): void {
       }
       setTimeout(() => (copy.textContent = "Copy"), 1500);
     });
-    head.append(label, copy);
     const wrap = document.createElement("div");
     wrap.className = "code-block";
+    head.append(label);
+    const source = code?.textContent ?? "";
+    // a whole HTML page (a game, a site, a slide deck) can be run right here, in a sandbox with no access to Focus
+    if (lang === "html" && /<(html|body|script|canvas|div)\b/i.test(source)) {
+      const run = document.createElement("button");
+      run.type = "button";
+      run.className = "code-preview-btn";
+      run.textContent = "▶ Preview";
+      let frame: HTMLIFrameElement | undefined;
+      const open = (full: boolean) => {
+        frame?.remove();
+        document.querySelector(".preview-close")?.remove();
+        frame = document.createElement("iframe");
+        frame.className = `code-preview${full ? " full" : ""}`;
+        frame.title = "Preview";
+        frame.setAttribute("sandbox", "allow-scripts allow-modals allow-pointer-lock");
+        frame.srcdoc = source;
+        wrap.append(frame);
+        if (full) {
+          const close = document.createElement("button");
+          close.type = "button";
+          close.className = "preview-close";
+          close.textContent = "Close preview";
+          close.addEventListener("click", () => {
+            close.remove();
+            frame?.classList.remove("full");
+          });
+          document.body.append(close);
+        }
+        run.textContent = "■ Hide";
+      };
+      run.addEventListener("click", () => {
+        if (frame?.isConnected) {
+          frame.remove();
+          document.querySelector(".preview-close")?.remove();
+          run.textContent = "▶ Preview";
+        } else open(false);
+      });
+      const full = document.createElement("button");
+      full.type = "button";
+      full.className = "code-preview-btn";
+      full.textContent = "Full screen";
+      full.addEventListener("click", () => open(true));
+      head.append(run, full);
+    }
+    head.append(copy);
     pre.replaceWith(wrap);
     wrap.append(head, pre);
   }

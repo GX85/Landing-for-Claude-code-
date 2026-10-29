@@ -2,9 +2,9 @@ import type { Ctx } from "./app";
 import { fetchModels } from "./api";
 import { h, icon, pageHead } from "./dom";
 import { MODES } from "./modes";
+import { agentAvatar } from "./brand";
 import {
   allSkills,
-  avatarOf,
   COLORS,
   FREE_MODELS,
   freeModelLabel,
@@ -200,7 +200,7 @@ export function renderAgents(main: HTMLElement, ctx: Ctx): void {
       h(
         "summary",
         { class: "card-head" },
-        h("span", { class: "avatar", style: `background:${agent.color}` }, avatarOf(agent)),
+        agentAvatar("", agent, conn?.provider),
         h(
           "span",
           { class: "card-title" },
@@ -516,6 +516,8 @@ const EFFORT_HINT: Partial<Record<Provider, string>> = {
   anthropic: "Higher effort thinks longer and costs more.",
   openai: "Sent as reasoning effort to reasoning models (o-series, GPT-5); others ignore it.",
   xai: "Sent as reasoning effort; Grok models that can't use it ignore it.",
+  mistral: "Sent as reasoning effort to Mistral models that can think.",
+  qwen: "Sent as reasoning effort to Qwen models that can think.",
   openrouter: "Sent as reasoning effort to models that support thinking.",
   gemini: "Sets the thinking budget for Gemini 2.5 and newer.",
   focus: "Free models mostly ignore it; it matters for the OpenRouter ones that can think.",
@@ -547,7 +549,7 @@ export function renderConnections(main: HTMLElement, ctx: Ctx): void {
       h(
         "div",
         { class: "card-head static" },
-        h("span", { class: "avatar", style: `background:${info.color}` }, conn.name.slice(0, 1)),
+        agentAvatar("", { color: info.color, name: conn.name }, conn.provider),
         h("span", { class: "card-title" }, h("span", { class: "card-name" }, conn.name), h("span", { class: "card-sub" }, used.length ? `Used by ${used.join(", ")}` : info.label)),
         status,
       );
@@ -602,7 +604,7 @@ export function renderConnections(main: HTMLElement, ctx: Ctx): void {
       }
     });
 
-    const removable = !["anthropic", "openai", "gemini", "xai"].includes(conn.provider) || state.connections.filter((c) => c.provider === conn.provider).length > 1;
+    const removable = !["anthropic", "openai", "gemini", "xai", "mistral", "qwen", "devin", "manus", "jules"].includes(conn.provider) || state.connections.filter((c) => c.provider === conn.provider).length > 1;
 
     return h(
       "section",

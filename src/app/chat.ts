@@ -6,7 +6,8 @@ import { ACCEPT, dataUrlOf, readAttachment } from "./attachments";
 import { resolveMedia, setConnections, type ImagePart } from "./api";
 import { modeInfo, MODES, startRun } from "./modes";
 import { click, setSound } from "./sound";
-import { allSkills, avatarOf, connectionOf, isReady, KIND_LABEL, missing, PROVIDERS, uid, type Agent, type Attachment, type Chat, type ChatConfig, type Message, type StepRecord } from "./store";
+import { agentAvatar, applyHub, focusMark } from "./brand";
+import { allSkills, connectionOf, isReady, KIND_LABEL, missing, newConnection, PROVIDERS, TIER_ORDER, TIERS, uid, type Agent, type Attachment, type Chat, type ChatConfig, type Hub, type Message, type StepRecord, type Tier } from "./store";
 
 const SCENE_VIDEO = "https://d2ol7oe51mr4n9.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/175fbbcd-e50a-480c-bab2-ca16d4678322.mp4";
 const SCENE_POSTER = "https://d2ol7oe51mr4n9.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/726b168c-da47-4682-a255-cc3e02f89bae.jpg";
@@ -89,74 +90,116 @@ export function renderChat(main: HTMLElement, ctx: Ctx, chat: Chat | undefined):
       : null,
   );
 
-  const composer = buildComposer(ctx, chat, config);
+  applyHub(hubOf(config));
+  let onHubChange: (() => void) | undefined;
+  const composer = buildComposer(ctx, chat, config, () => onHubChange?.());
 
   if (!chat || !chat.messages.length) {
-    const ready = ctx.state.agents.some((a) => isReady(ctx.state, a));
-    main.replaceChildren(
-      head,
-      h(
-        "div",
-        { class: "hello" },
-        h(
-          "div",
-          { class: "hello-pill", "aria-hidden": "true" },
-          h("video", { src: SCENE_VIDEO, poster: SCENE_POSTER, muted: true, loop: true, autoplay: true, playsinline: true, preload: "auto" }),
-        ),
-        h("h1", { class: "hello-title" }, "What should your team focus on?"),
-        composer,
-        ready
-          ? h(
-              "div",
-              { class: "suggestions" },
-              ...SUGGESTIONS.filter((s) => !s.kind || ctx.state.agents.some((a) => a.kind === s.kind && isReady(ctx.state, a))).slice(0, 4).map((s) =>
-                h(
-                  "button",
-                  {
-                    class: "suggestion",
-                    type: "button",
-                    onclick: () => {
-                      config.mode = s.mode;
-                      ctx.state.config.mode = s.mode;
-                      const maker = s.kind && ctx.state.agents.find((a) => a.kind === s.kind && isReady(ctx.state, a));
-                      if (maker) config.leadId = ctx.state.config.leadId = maker.id;
-                      ctx.persist();
-                      renderChat(main, ctx, chat);
-                      const input = main.querySelector<HTMLTextAreaElement>(".composer textarea");
-                      if (input) {
-                        input.value = s.text;
-                        input.dispatchEvent(new Event("input"));
-                        input.focus();
-                      }
-                    },
-                  },
-                  h("span", { class: "suggestion-mode" }, icon(s.kind ?? modeInfo(s.mode).icon, 15), s.kind ? "Image" : modeInfo(s.mode).name),
-                  h("span", {}, s.text),
-                ),
-              ),
-            )
-          : h(
-              "a",
-              {
-                class: "setup-hint",
-                href: "/app/connections",
-                onclick: (e) => {
-                  e.preventDefault();
-                  ctx.go({ name: "connections" });
-                },
-              },
-              icon("key", 16),
-              "Add an API key in Connections to start",
-            ),
-      ),
-    );
-    main.querySelector<HTMLVideoElement>(".hello-pill video")?.play().catch(() => undefined);
+    const title = h("h1", { class: "hello-title" });
+    const sugg = h("div", { class: "suggestions" });
+    const paint = (animate: boolean) => {
+      title.textContent = hubOf(config) === "focus" ? "What shall we focus on?" : "Assemble the team.";
+      sugg.replaceChildren(...suggestionsFor(ctx, config, main, chat));
+      for (const el of [title, sugg]) {
+        el.classList.remove("swap");
+        if (animate) {
+          void el.offsetWidth;
+          el.classList.add("swap");
+        }
+      }
+    };
+    onHubChange = () => paint(true);
+    paint(false);
+    main.replaceChildren(head, h("div", { class: "hello" }, h("div", { class: "hello-logo", "aria-hidden": "true" }, focusMark(76)), title, composer, sugg));
     return;
   }
 
   for (const m of chat.messages) list.append(messageEl(ctx, chat, m));
   main.replaceChildren(head, scroller, h("div", { class: "composer-dock" }, composer, h("p", { class: "disclaimer" }, "Agents can make mistakes. Check important info.")));
   requestAnimationFrame(() => (scroller.scrollTop = scroller.scrollHeight));
+}
+
+const hubOf = (c: ChatConfig): Hub => c.hub ?? "aeronus";
+
+const TIER_SUGGESTIONS: Record<Tier, string[]> = {
+  storm: ["Explain how DNS works in five sentences.", "Give me ten name ideas for a coffee shop.", "Pros and cons of remote work, in a quick list.", "Translate “good morning” into eight languages."],
+  gen: ["Plan a three-day trip to Tokyo on a budget.", "Explain recursion with a real-life analogy.", "Write a friendly email asking for a deadline extension.", "Compare PostgreSQL and MongoDB for a small app."],
+  clorus: ["Build a snake game I can play right here.", "Make a six-slide pitch deck for a coffee subscription.", "Create a landing page for a yoga studio.", "Build a pomodoro timer app with a dark theme."],
+};
+
+function fillInput(main: HTMLElement, text: string): void {
+  const input = main.querySelector<HTMLTextAreaElement>(".composer textarea");
+  if (!input) return;
+  input.value = text;
+  input.dispatchEvent(new Event("input"));
+  input.focus();
+}
+
+/** The starter chips under the composer: tier-specific in Focus, mode-specific in Aeronus. */
+function suggestionsFor(ctx: Ctx, config: ChatConfig, main: HTMLElement, chat: Chat | undefined): Node[] {
+  if (hubOf(config) === "focus") {
+    return TIER_SUGGESTIONS[config.tier].map((text) =>
+      h(
+        "button",
+        { class: "suggestion", type: "button", onclick: () => fillInput(main, text) },
+        h("span", { class: `suggestion-mode tier-${config.tier}` }, TIERS[config.tier].name),
+        h("span", {}, text),
+      ),
+    );
+  }
+  if (!ctx.state.agents.some((a) => isReady(ctx.state, a))) {
+    return [
+      h(
+        "a",
+        {
+          class: "setup-hint",
+          href: "/app/connections",
+          onclick: (e: Event) => {
+            e.preventDefault();
+            ctx.go({ name: "connections" });
+          },
+        },
+        icon("key", 16),
+        "Add an API key in Connections to start",
+      ),
+    ];
+  }
+  return SUGGESTIONS.filter((s) => !s.kind || ctx.state.agents.some((a) => a.kind === s.kind && isReady(ctx.state, a)))
+    .slice(0, 4)
+    .map((s) =>
+      h(
+        "button",
+        {
+          class: "suggestion",
+          type: "button",
+          onclick: () => {
+            config.mode = s.mode;
+            ctx.state.config.mode = s.mode;
+            const maker = s.kind && ctx.state.agents.find((a) => a.kind === s.kind && isReady(ctx.state, a));
+            if (maker) config.leadId = ctx.state.config.leadId = maker.id;
+            ctx.persist();
+            renderChat(main, ctx, chat);
+            fillInput(main, s.text);
+          },
+        },
+        h("span", { class: "suggestion-mode" }, icon(s.kind ?? modeInfo(s.mode).icon, 15), s.kind ? "Image" : modeInfo(s.mode).name),
+        h("span", {}, s.text),
+      ),
+    );
+}
+
+const TIER_COLORS: Record<Tier, string> = { storm: "#e5484d", gen: "#8b5cf6", clorus: "#f59e0b" };
+
+/** Focus chats run one assistant per tier; it is made on the fly and never listed on the Agents page. */
+function tierAgent(ctx: Ctx, tier: Tier): Agent {
+  let conn = ctx.state.connections.find((c) => c.provider === "focus");
+  if (!conn) {
+    conn = newConnection("focus");
+    ctx.state.connections.unshift(conn);
+    ctx.persist();
+  }
+  const t = TIERS[tier];
+  return { id: `tier-${tier}`, name: t.name, connectionId: conn.id, kind: "chat", model: `tier:${tier}`, effort: "", role: t.role, color: TIER_COLORS[tier], enabled: true, skills: [], avatar: "" };
 }
 
 /* ---------- messages ---------- */
@@ -237,7 +280,7 @@ function stepEl(step: StepRecord, compact: boolean): HTMLElement {
     h(
       "div",
       { class: "step-head" },
-      step.status === "running" ? h("span", { class: "spinner sm" }) : h("span", { class: "avatar sm", style: `background:${step.color}` }, avatarOf(step)),
+      step.status === "running" ? h("span", { class: "spinner sm" }) : agentAvatar("sm", step, step.provider),
       h("span", { class: "step-who" }, step.agentName),
       h("span", { class: "step-phase" }, step.phase),
       h("span", { class: "step-time" }, step.status === "error" ? "failed" : stepTime(step)),
@@ -298,7 +341,7 @@ function fillAssistant(ctx: Ctx, chat: Chat, m: Message, el: HTMLElement): void 
   const head = h(
     "div",
     { class: "msg-head" },
-    h("span", { class: "avatars" }, ...names.slice(0, 4).map((s) => h("span", { class: "avatar", style: `background:${s.color}`, title: s.agentName }, avatarOf(s)))),
+    h("span", { class: "avatars" }, ...names.slice(0, 4).map((s) => agentAvatar("", s, s.provider))),
     h("span", { class: "msg-mode" }, icon(mode.icon, 15), mode.name),
     h("span", { class: "msg-team" }, names.map((s) => s.agentName).join(", ")),
   );
@@ -445,10 +488,14 @@ function historyBefore(chat: Chat, userMsg: Message): ChatTurn[] {
 }
 
 async function runTurn(ctx: Ctx, chat: Chat, userMsg: Message): Promise<void> {
-  const team = teamOf(ctx, chat.config);
-  const lead = leadOf(ctx, chat.config, team);
-  const agents = chat.config.mode === "solo" && lead ? [lead] : team;
-  const m: Message = { id: uid(), role: "assistant", content: "", mode: chat.config.mode, status: "running", steps: [], createdAt: Date.now() };
+  // Focus: one assistant per tier. Aeronus (and chats from before hubs existed): the whole team.
+  const focusHub = chat.config.hub === "focus";
+  const tier = focusHub ? tierAgent(ctx, chat.config.tier) : undefined;
+  const team = tier ? [tier] : teamOf(ctx, chat.config);
+  const lead = tier ?? leadOf(ctx, chat.config, team);
+  const mode = focusHub ? "solo" : chat.config.mode;
+  const agents = mode === "solo" && lead ? [lead] : team;
+  const m: Message = { id: uid(), role: "assistant", content: "", mode, status: "running", steps: [], createdAt: Date.now() };
   chat.messages.push(m);
   chat.updatedAt = Date.now();
   ctx.persist();
@@ -470,7 +517,7 @@ async function runTurn(ctx: Ctx, chat: Chat, userMsg: Message): Promise<void> {
   updateComposer(chat.id);
 
   const run = startRun({
-    mode: chat.config.mode,
+    mode,
     task: withAttachments(userMsg.content, userMsg.attachments, true) || "Describe the attached image.",
     images: imagesOf(userMsg),
     history: historyBefore(chat, userMsg),
@@ -488,7 +535,7 @@ async function runTurn(ctx: Ctx, chat: Chat, userMsg: Message): Promise<void> {
     const outcome = await run.done;
     m.finalStepId = outcome.final?.id;
     m.note = outcome.note;
-    if (chat.config.mode === "compare") {
+    if (mode === "compare") {
       m.content = run.steps.filter((s) => s.status === "done").map((s) => `### ${s.agentName}\n${s.text}`).join("\n\n");
     } else {
       m.content = outcome.final?.text ?? "";
@@ -604,7 +651,7 @@ function openPopover(anchor: HTMLElement, content: HTMLElement): void {
 
 addEventListener("resize", closePopover);
 
-function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig): HTMLElement {
+function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onHubChange?: () => void): HTMLElement {
   const input = h("textarea", { rows: 1, placeholder: "Message your team…", "aria-label": "Message" });
   const files = h("div", { class: "composer-files" });
   const sendBtn = h("button", { class: "send-btn", type: "button" });
@@ -703,30 +750,87 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig): HT
   sendBtn.addEventListener("click", submit);
 
   const bar = h("div", { class: "composer-bar" });
+
+  // The hub switch and the tier picker live outside renderBar, so their thumbs slide instead of being rebuilt.
+  const hubOption = (hub: Hub, label: string) =>
+    h("button", { class: `hub-opt hub-${hub}`, type: "button", role: "radio", "data-hub": hub, onclick: () => setHub(hub) }, label);
+  const hubSwitch = h(
+    "div",
+    { class: "hub-switch", role: "radiogroup", "aria-label": "Focus or Aeronus", "data-hub": hubOf(config) },
+    h("span", { class: "hub-thumb", "aria-hidden": "true" }),
+    hubOption("focus", "Focus"),
+    hubOption("aeronus", "Aeronus"),
+  );
+  const tierOption = (tier: Tier) =>
+    h("button", { class: `tier-opt tier-${tier}`, type: "button", role: "radio", "data-tier": tier, title: `${TIERS[tier].name} — ${TIERS[tier].blurb}`, onclick: () => setTier(tier) }, TIERS[tier].name);
+  const tierSeg = h(
+    "div",
+    { class: "tier-seg", role: "radiogroup", "aria-label": "Focus tier", "data-tier": config.tier },
+    h("span", { class: "tier-thumb", "aria-hidden": "true" }),
+    ...TIER_ORDER.map(tierOption),
+  );
+  const opts = h("div", { class: "bar-opts" });
+  let shownHub: Hub | undefined;
+
   const renderBar = () => {
+    const hub = hubOf(config);
     const mode = modeInfo(config.mode);
     const team = teamOf(ctx, config);
     const lead = leadOf(ctx, config, team);
     const shown = config.mode === "solo" ? (lead ? [lead] : []) : team;
+    hubSwitch.dataset.hub = hub;
+    tierSeg.dataset.tier = config.tier;
+    for (const b of hubSwitch.querySelectorAll<HTMLElement>(".hub-opt")) b.setAttribute("aria-checked", String(b.dataset.hub === hub));
+    for (const b of tierSeg.querySelectorAll<HTMLElement>(".tier-opt")) b.setAttribute("aria-checked", String(b.dataset.tier === config.tier));
+    input.placeholder = hub === "focus" ? `Ask ${TIERS[config.tier].name}…` : "Message your team…";
+    opts.replaceChildren(
+      ...(hub === "focus"
+        ? [tierSeg]
+        : [
+            h(
+              "button",
+              { class: "chip-btn", type: "button", "data-popover": "mode", "aria-haspopup": "dialog", onclick: (e) => openPopover(e.currentTarget as HTMLElement, modeMenu()) },
+              icon(mode.icon, 16),
+              mode.name,
+              icon("chevron", 14),
+            ),
+            h(
+              "button",
+              { class: "chip-btn", type: "button", "data-popover": "team", "aria-haspopup": "dialog", onclick: (e) => openPopover(e.currentTarget as HTMLElement, teamMenu()) },
+              h("span", { class: "avatars" }, ...shown.slice(0, 4).map((a) => agentAvatar("xs", a, connectionOf(ctx.state, a)?.provider))),
+              shown.length === 1 ? shown[0].name : shown.length ? `${shown.length} agents` : "No agents",
+              icon("chevron", 14),
+            ),
+          ]),
+    );
+    if (shownHub && shownHub !== hub) {
+      opts.classList.remove("swap");
+      void opts.offsetWidth;
+      opts.classList.add("swap");
+    }
+    shownHub = hub;
     bar.replaceChildren(
       h("button", { class: "chip-btn icon-only", type: "button", title: "Attach images, PDFs or text files", "aria-label": "Attach files", onclick: () => fileInput.click() }, icon("clip")),
-      h(
-        "button",
-        { class: "chip-btn", type: "button", "data-popover": "mode", "aria-haspopup": "dialog", onclick: (e) => openPopover(e.currentTarget as HTMLElement, modeMenu()) },
-        icon(mode.icon, 16),
-        mode.name,
-        icon("chevron", 14),
-      ),
-      h(
-        "button",
-        { class: "chip-btn", type: "button", "data-popover": "team", "aria-haspopup": "dialog", onclick: (e) => openPopover(e.currentTarget as HTMLElement, teamMenu()) },
-        h("span", { class: "avatars" }, ...shown.slice(0, 4).map((a) => h("span", { class: "avatar xs", style: `background:${a.color}` }, avatarOf(a)))),
-        shown.length === 1 ? shown[0].name : shown.length ? `${shown.length} agents` : "No agents",
-        icon("chevron", 14),
-      ),
+      hubSwitch,
+      opts,
       h("span", { class: "spacer" }),
       sendBtn,
     );
+  };
+
+  const setHub = (hub: Hub) => {
+    if (hubOf(config) === hub) return;
+    config.hub = hub;
+    changed();
+    applyHub(hub, true);
+    onHubChange?.();
+  };
+
+  const setTier = (tier: Tier) => {
+    if (config.tier === tier) return;
+    config.tier = tier;
+    changed();
+    onHubChange?.();
   };
 
   const changed = () => {
@@ -799,7 +903,7 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig): HT
                 render();
               },
             }),
-            h("span", { class: "avatar xs", style: `background:${a.color}` }, avatarOf(a)),
+            agentAvatar("xs", a, connectionOf(ctx.state, a)?.provider),
             h(
               "span",
               { class: "team-name" },

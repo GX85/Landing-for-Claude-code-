@@ -4,6 +4,8 @@ export type Provider =
   | "openai"
   | "gemini"
   | "xai"
+  | "mistral"
+  | "qwen"
   | "openrouter"
   | "ollama"
   | "pollinations"
@@ -91,6 +93,40 @@ export const FREE_MODELS: { id: string; label: string; note: string }[] = [
   { id: "pollinations/openai-fast", label: "GPT-OSS 20B · Pollinations", note: "A second free server" },
 ];
 
+/**
+ * Focus tiers. Each tries its OpenRouter models first (through Focus's key, or the user's own),
+ * then falls back to keyless free models, so every tier works with no setup at all.
+ */
+export const TIERS: Record<Tier, { name: string; tag: string; blurb: string; or: string[]; free: string[]; role: string }> = {
+  storm: {
+    name: "Storm",
+    tag: "Lightning fast",
+    blurb: "The lightest, fastest models. Short answers in a flash.",
+    or: ["nvidia/nemotron-3.5-lightning:free", "liquid/lfm-2.5-2.6b:free", "google/gemma-4-26b-a4b-it:free"],
+    free: ["llm7/mistral-Nemo-Instruct-2407", "pollinations/openai-fast"],
+    role: "Answer fast and briefly: short, direct replies without preamble.",
+  },
+  gen: {
+    name: "GEN",
+    tag: "Balanced",
+    blurb: "Mid-size models: quick enough for chat, sharp enough for real work.",
+    or: ["google/gemma-4-31b-it:free", "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free", "thinkingmachines/inkling-small:free"],
+    free: ["llm7/nemotron-3-nano:30b", "llm7/minimax-m2.7"],
+    role: "",
+  },
+  clorus: {
+    name: "Clorus",
+    tag: "Smartest · builds things",
+    blurb: "The most capable models. Makes presentations, games, websites and apps you can preview right in the chat.",
+    or: ["nvidia/nemotron-3-ultra-550b-a55b:free", "thinkingmachines/inkling:free", "poolside/laguna-s-2.1:free"],
+    free: ["llm7/minimax-m2.7", "llm7/gpt-oss:20b"],
+    role:
+      "You are the most capable assistant in Focus. Think carefully before you answer. When asked to build a presentation, game, website or app, reply with ONE complete, self-contained HTML file in a single ```html code block: inline CSS and JavaScript, no external files, no build step, polished, responsive and with a real design. For a presentation, make full-screen slides with arrow-key and swipe navigation. After the code, add a one-line note on how to use it.",
+  },
+};
+
+export const TIER_ORDER: Tier[] = ["storm", "gen", "clorus"];
+
 export const freeModelLabel = (id: string) => FREE_MODELS.find((m) => m.id === id)?.label ?? id.replace(/^openrouter\//, "").replace(/:free$/, " (free)");
 
 /** What an agent's round badge shows: its avatar, or the first letter of its name. */
@@ -161,7 +197,13 @@ export const BUILTIN_SKILLS: Skill[] = [
   },
 ];
 
+/** Focus: one assistant in three tiers. Aeronus: the agent hub, a whole team. */
+export type Hub = "focus" | "aeronus";
+export type Tier = "storm" | "gen" | "clorus";
+
 export interface ChatConfig {
+  hub: Hub;
+  tier: Tier;
   mode: ModeId;
   agentIds: string[];
   leadId: string;
@@ -169,6 +211,7 @@ export interface ChatConfig {
 }
 
 export interface StepRecord {
+  provider?: Provider;
   avatar?: string;
   id: number;
   agentId: string;
@@ -356,6 +399,32 @@ export const PROVIDERS: Record<Provider, ProviderInfo> = {
     needsKey: true,
     needsUrl: false,
     color: "#3a3a3c",
+  },
+  mistral: {
+    label: "Mistral",
+    group: "chat",
+    agentName: "Mistral",
+    kinds: ["chat"],
+    models: { chat: "mistral-large-latest" },
+    keyPlaceholder: "…",
+    keyUrl: "https://console.mistral.ai/api-keys",
+    needsKey: true,
+    needsUrl: false,
+    hint: "Mistral Large, Medium, Small and Codestral. The free “Experiment” plan works with a phone number.",
+    color: "#fa520f",
+  },
+  qwen: {
+    label: "Qwen (Alibaba)",
+    group: "chat",
+    agentName: "Qwen",
+    kinds: ["chat"],
+    models: { chat: "qwen-plus" },
+    keyPlaceholder: "sk-…",
+    keyUrl: "https://bailian.console.alibabacloud.com/?apiKey=1",
+    needsKey: true,
+    needsUrl: false,
+    hint: "Qwen Max, Plus and Flash through Alibaba Cloud Model Studio (international). New accounts get free tokens.",
+    color: "#615ced",
   },
   custom: {
     label: "OpenAI-compatible",
@@ -699,7 +768,10 @@ export function newAgent(connection: Connection, kind?: AgentKind): Agent {
   };
 }
 
-const STATE_VERSION = 4;
+const STATE_VERSION = 5;
+
+/** The Aeronus team out of the box: every one needs the user's own key. */
+const TEAM_PROVIDERS: Provider[] = ["anthropic", "openai", "gemini", "xai", "mistral", "qwen", "devin", "manus", "jules"];
 
 function focusAgents(focus: Connection): Agent[] {
   return [newAgent(focus, "chat"), { ...newAgent(focus, "image"), name: "Focus Image" }];
@@ -707,14 +779,14 @@ function focusAgents(focus: Connection): Agent[] {
 
 function defaults(): State {
   const focus = newConnection("focus");
-  const connections = [focus, ...(["anthropic", "openai", "gemini", "xai"] as Provider[]).map(newConnection)];
+  const connections = [focus, ...TEAM_PROVIDERS.map(newConnection)];
   const agents = [...focusAgents(focus), ...connections.slice(1).map((c) => newAgent(c))];
   return {
     connections,
     agents,
     chats: [],
     // works right away: a one-on-one chat with the free model
-    config: { mode: "solo", agentIds: agents.filter((a) => a.kind === "chat").map((a) => a.id), leadId: agents[0].id, rounds: 2 },
+    config: { hub: "focus", tier: "gen", mode: "solo", agentIds: agents.filter((a) => a.kind === "chat").map((a) => a.id), leadId: agents[0].id, rounds: 2 },
     sidebarCollapsed: false,
     skills: [],
     sound: true,
@@ -745,6 +817,17 @@ function upgrade(state: State): State {
     a.skills ??= [];
     a.avatar ??= "";
     if (focusIds.has(a.connectionId) && a.kind === "chat" && !/^(llm7|pollinations|openrouter)\//.test(a.model)) a.model = PROVIDERS.focus.models.chat!;
+  }
+  // v5: Focus tiers vs Aeronus hub, plus Mistral, Qwen, Devin, Manus and Jules in the team
+  state.config.hub ??= "focus";
+  state.config.tier ??= "gen";
+  for (const provider of TEAM_PROVIDERS) {
+    if (state.connections.some((c) => c.provider === provider)) continue;
+    const conn = newConnection(provider);
+    state.connections.push(conn);
+    const agent = newAgent(conn);
+    state.agents.push(agent);
+    if (agent.kind === "chat") state.config.agentIds.push(agent.id);
   }
   state.version = STATE_VERSION;
   return state;

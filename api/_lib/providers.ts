@@ -10,6 +10,8 @@ export type Provider =
   | "openai"
   | "gemini"
   | "xai"
+  | "mistral"
+  | "qwen"
   | "openrouter"
   | "pollinations"
   | "custom"
@@ -28,6 +30,8 @@ export const PROVIDERS: readonly Provider[] = [
   "openai",
   "gemini",
   "xai",
+  "mistral",
+  "qwen",
   "openrouter",
   "pollinations",
   "custom",
@@ -97,6 +101,8 @@ export class UserError extends Error {
 const REQUEST_TIMEOUT_MS = 290_000;
 const XAI_BASE_URL = "https://api.x.ai/v1";
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
+const MISTRAL_BASE_URL = "https://api.mistral.ai/v1";
+const QWEN_BASE_URL = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1";
 export const POLLINATIONS_BASE_URL = "https://gen.pollinations.ai/v1";
 const POLLINATIONS_FREE_URL = "https://text.pollinations.ai/openai";
 /** The free model that works without any key. */
@@ -114,6 +120,8 @@ export async function runAgent(input: RunInput): Promise<RunResult> {
       return runClaude(input);
     case "openai":
     case "xai":
+    case "mistral":
+    case "qwen":
     case "openrouter":
     case "pollinations":
     case "custom":
@@ -238,6 +246,8 @@ async function runClaude({ agent, system, messages, signal, onText }: RunInput):
 
 const BASE_URLS: Partial<Record<Provider, string>> = {
   xai: XAI_BASE_URL,
+  mistral: MISTRAL_BASE_URL,
+  qwen: QWEN_BASE_URL,
   openrouter: OPENROUTER_BASE_URL,
   pollinations: POLLINATIONS_BASE_URL,
 };
@@ -443,6 +453,8 @@ export async function listModels(agent: AgentConfig): Promise<string[]> {
     }
     case "openai":
     case "xai":
+    case "mistral":
+    case "qwen":
     case "openrouter":
     case "custom": {
       const ids: string[] = [];

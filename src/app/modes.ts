@@ -156,6 +156,7 @@ class Run {
       agentId: agent.id,
       agentName: agent.name,
       avatar: agent.avatar,
+      provider: this.ctx.connectionOf(agent)?.provider,
       color: agent.color,
       phase,
       status: "running",
