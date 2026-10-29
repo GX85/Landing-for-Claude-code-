@@ -380,7 +380,8 @@ async function callTier(spec: string, agent: Agent, conn: Connection, system: st
   const previous = /<!--\s*focus:preview kind=(\w+)/.exec([...messages].reverse().find((m) => m.role === "assistant")?.content ?? "")?.[1] as BuildKind | undefined;
   const kind = (agent.create && agent.create !== "image" && agent.create !== "video" ? (agent.create as BuildKind) : null) ?? detectBuild(ask) ?? (previous && ask.length < 600 && !/\?\s*$/.test(ask) ? previous : null);
   const chosen = Number(levelText) as ThinkLevel;
-  const level = LEVEL[chosen >= 1 && chosen <= 4 ? (chosen as 1 | 2 | 3 | 4) : autoLevel(ask)];
+  // UltraVision is for real questions: a greeting or a short remark gets the quick path
+  const level = LEVEL[chosen === 4 && autoLevel(ask) === 1 ? 1 : chosen >= 1 && chosen <= 4 ? (chosen as 1 | 2 | 3 | 4) : autoLevel(ask)];
 
   if (kind) {
     let sticky: string | undefined;

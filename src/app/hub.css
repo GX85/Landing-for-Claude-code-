@@ -1795,3 +1795,18 @@ html.dark .app-root .md code {
 .set-body input {
   width: 100%;
 }
+
+@media (max-width: 440px) {
+  .composer-bar {
+    gap: 4px;
+  }
+
+  .composer-bar .hub-opt {
+    padding: 0 9px;
+  }
+
+  .composer-bar .chip-btn {
+    padding: 0 8px;
+    gap: 4px;
+  }
+}

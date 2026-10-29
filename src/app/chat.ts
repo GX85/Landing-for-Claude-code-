@@ -42,7 +42,7 @@ let view: { chatId?: string; list: HTMLElement; scroller: HTMLElement; ctx: Ctx 
 export function renderChat(main: HTMLElement, ctx: Ctx, chat: Chat | undefined): void {
   connectionsRef = ctx.state.connections;
   setConnections(ctx.state.connections);
-  const config = chat?.config ?? (draft = structuredClone(ctx.state.config));
+  const config = chat?.config ?? (draft = { ...structuredClone(ctx.state.config), ...(ctx.state.config.think === 4 ? { think: 0 } : {}) });
   const list = h("div", { class: "thread" });
   const scroller = h("div", { class: "chat-scroll" }, list);
   view = { chatId: chat?.id, list, scroller, ctx };
@@ -1012,45 +1012,72 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onH
       /* already stopped */
     }
   };
+  let wanted = false;
+  let base = "";
+  let finalText = "";
+  const startVoice = () => {
+    rec = new Rec!();
+    rec.lang = getLang() === "ru" ? "ru-RU" : "en-US";
+    rec.interimResults = true;
+    // phones repeat words in continuous mode, so each phrase is its own session and the next one starts on end
+    rec.continuous = false;
+    rec.maxAlternatives = 1;
+    rec.onresult = (e: any) => {
+      let interim = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const r = e.results[i];
+        if (r.isFinal) finalText += (finalText && !/\s$/.test(finalText) ? " " : "") + r[0].transcript.trim();
+        else interim += r[0].transcript;
+      }
+      input.value = base + finalText + (interim ? (finalText ? " " : "") + interim : "");
+      sync();
+    };
+    rec.onerror = (e: any) => {
+      if (e.error === "no-speech" || e.error === "aborted") return;
+      wanted = false;
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") alert(tr("Allow the microphone for this site to dictate. If Focus is open inside another page, open it in its own tab."));
+      else alert(tr("Voice input failed. Check the internet connection and try again."));
+    };
+    rec.onend = () => {
+      rec = undefined;
+      if (wanted) {
+        base = input.value ? input.value.replace(/\s*$/, " ") : "";
+        finalText = "";
+        try {
+          startVoice();
+          return;
+        } catch {
+          wanted = false;
+        }
+      }
+      micBtn.classList.remove("on");
+      sync();
+    };
+    rec.start();
+  };
   micBtn.addEventListener("click", () => {
     if (!Rec) {
       alert(tr("Voice input isn't supported in this browser. Try Chrome, Edge or Safari."));
       return;
     }
-    if (rec) return stopVoice();
-    const base = input.value ? input.value.replace(/\s*$/, " ") : "";
-    let finalText = "";
-    rec = new Rec();
-    rec.lang = getLang() === "ru" ? "ru-RU" : "en-US";
-    rec.interimResults = true;
-    rec.continuous = true;
-    rec.onresult = (e: any) => {
-      let interim = "";
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const r = e.results[i];
-        if (r.isFinal) finalText += r[0].transcript;
-        else interim += r[0].transcript;
-      }
-      input.value = base + finalText + interim;
-      sync();
-    };
-    rec.onerror = (e: any) => {
-      if (e.error === "not-allowed" || e.error === "service-not-allowed") alert(tr("Allow the microphone for this site to dictate."));
-    };
-    rec.onend = () => {
-      rec = undefined;
-      micBtn.classList.remove("on");
-      sync();
-    };
+    if (wanted) {
+      wanted = false;
+      return stopVoice();
+    }
+    base = input.value ? input.value.replace(/\s*$/, " ") : "";
+    finalText = "";
+    wanted = true;
     try {
-      rec.start();
+      startVoice();
       micBtn.classList.add("on");
     } catch {
+      wanted = false;
       rec = undefined;
     }
   });
 
   const submit = () => {
+    wanted = false;
     stopVoice();
     if (chat && runs.has(chat.id)) {
       runs.get(chat.id)?.abort();
@@ -1266,7 +1293,6 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onH
       ...(hub === "focus" && !fa ? [thinkChip] : []),
       opts,
       h("span", { class: "spacer" }),
-      micBtn,
       sendBtn,
     );
   };
@@ -1422,7 +1448,7 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onH
   renderBar();
   sync();
   renderFiles();
-  const composer = h("div", { class: "composer" }, createPill, files, input, caption, bar, fileInput);
+  const composer = h("div", { class: "composer" }, createPill, files, micBtn, input, caption, bar, fileInput);
   composer.addEventListener("dragover", (e) => {
     e.preventDefault();
     composer.classList.add("drop");

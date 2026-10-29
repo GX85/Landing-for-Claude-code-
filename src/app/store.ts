@@ -912,6 +912,8 @@ function upgrade(state: State): State {
   // v5: Focus tiers vs Aeronus hub, plus Mistral, Qwen, Devin, Manus and Jules in the team
   state.config.hub ??= "focus";
   state.config.tier ??= "gen";
+  // UltraVision is slow, so it never carries over into later sessions
+  if (state.config.think === 4) state.config.think = 0;
   for (const provider of TEAM_PROVIDERS) {
     if (state.connections.some((c) => c.provider === provider)) continue;
     const conn = newConnection(provider);
