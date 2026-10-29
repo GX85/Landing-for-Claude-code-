@@ -715,8 +715,8 @@ html.dark .app-root .md code {
 }
 .think-range {
   --p: 0%;
-  width: 100%;
-  margin: 14px 0 6px;
+  width: calc(100% - 12px);
+  margin: 14px 6px 6px;
   height: 22px;
   background: transparent;
   -webkit-appearance: none;
@@ -786,4 +786,62 @@ html.dark .app-root .md code {
   .think-chip[data-level="0"] .think-bars i {
     animation: none;
   }
+}
+
+/* ---------- UltraVision ---------- */
+.think-chip[data-level="4"] {
+  background: linear-gradient(120deg, hsl(var(--h) 95% 55% / 0.22), hsl(calc(var(--h) + 140) 95% 60% / 0.22));
+  box-shadow: inset 0 0 0 1px hsl(var(--h) 95% 60% / 0.45), 0 0 18px -4px hsl(var(--h) 95% 60% / 0.7);
+}
+.think-chip[data-level="4"] .think-bars i {
+  background: linear-gradient(180deg, #fff, hsl(var(--h) 95% 62%));
+  box-shadow: 0 0 8px hsl(var(--h) 95% 60%);
+  animation: bar-ultra 1.2s ease-in-out infinite;
+}
+.think-chip[data-level="4"] .think-bars i:nth-child(2) { animation-delay: 0.15s; }
+.think-chip[data-level="4"] .think-bars i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes bar-ultra {
+  50% { transform: scaleY(0.6); }
+}
+.think-chip[data-level="4"],
+.think-marks button[data-i="4"] {
+  font-weight: 800;
+}
+.think-chip[data-level="4"] {
+  color: var(--ink);
+}
+.think-marks button[data-i="4"] {
+  background: linear-gradient(90deg, hsl(var(--h) 95% 62%), hsl(calc(var(--h) + 140) 95% 65%));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.think-marks button {
+  font-size: 12px;
+}
+.think-menu {
+  width: min(340px, calc(100vw - 32px));
+}
+@media (prefers-reduced-motion: reduce) {
+  .think-chip[data-level="4"] .think-bars i {
+    animation: none;
+  }
+}
+.popover {
+  max-width: calc(100vw - 24px);
+}
+.think-short {
+  display: none;
+}
+@media (max-width: 480px) {
+  .think-long {
+    display: none;
+  }
+  .think-short {
+    display: inline;
+  }
+}
+
+.think-menu {
+  width: min(330px, calc(100vw - 56px));
 }

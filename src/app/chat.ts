@@ -228,11 +228,12 @@ function suggestionsFor(ctx: Ctx, config: ChatConfig, main: HTMLElement, chat: C
 }
 
 /** The thinking levels, as the slider shows them. */
-const THINK = [
+const THINK: { name: string; short?: string; hint: string }[] = [
   { name: "Auto", hint: "Focus decides for every message: a quick reply to “hi”, deep thinking for hard questions and builds." },
   { name: "Quick", hint: "Answers right away and keeps it short. Best for small talk and simple facts." },
   { name: "Think", hint: "Thinks it through before answering. A good default for real questions." },
   { name: "Deep", hint: "Reasons step by step, checks its work and goes long. Slower, but sharper on hard problems." },
+  { name: "UltraVision", short: "Ultra", hint: "The strongest mode: the best models write a draft, tear it apart like a strict reviewer and rewrite it. Twice as slow, noticeably smarter." },
 ];
 
 const TIER_COLORS: Record<Tier, string> = { storm: "#e5484d", gen: "#8b5cf6", clorus: "#f59e0b" };
@@ -750,7 +751,8 @@ function closePopover(): void {
   popover = undefined;
 }
 document.addEventListener("click", (e) => {
-  if (popover && !(e.target as Element).closest(".popover, [data-popover]")) closePopover();
+  // composedPath still knows where the click went even if the target was re-rendered since
+  if (popover && !e.composedPath().some((n) => n instanceof Element && n.matches(".popover, [data-popover]"))) closePopover();
 });
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") closePopover();
@@ -768,6 +770,10 @@ function openPopover(anchor: HTMLElement, content: HTMLElement): void {
   if (r.top > innerHeight / 2) Object.assign(popover.style, { left: `${left}px`, bottom: `${innerHeight - r.top + 8}px` });
   else Object.assign(popover.style, { left: `${left}px`, top: `${r.bottom + 8}px` });
   anchor.closest(".app-root")!.append(popover);
+  // keep the whole popover on screen, whatever its real width
+  // offsetWidth ignores the opening scale animation, so this is the real size
+  const w = popover.offsetWidth;
+  popover.style.left = `${Math.max(12, Math.min(r.left, innerWidth - w - 12))}px`;
 }
 
 addEventListener("resize", closePopover);
@@ -897,19 +903,24 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onH
   const paintThink = () => {
     const lvl = config.think ?? 0;
     thinkChip.dataset.level = String(lvl);
-    thinkChip.replaceChildren(h("span", { class: "think-bars", "aria-hidden": "true" }, h("i"), h("i"), h("i")), THINK[lvl].name);
+    thinkChip.replaceChildren(
+      h("span", { class: "think-bars", "aria-hidden": "true" }, h("i"), h("i"), h("i")),
+      h("span", { class: "think-long" }, THINK[lvl].name),
+      h("span", { class: "think-short", "aria-hidden": "true" }, THINK[lvl].short ?? THINK[lvl].name),
+    );
     thinkChip.setAttribute("aria-label", `Thinking: ${THINK[lvl].name}`);
   };
   const thinkMenu = () => {
     const hint = h("p", { class: "think-hint" }, THINK[config.think ?? 0].hint);
-    const range = h("input", { type: "range", min: 0, max: 3, step: 1, value: String(config.think ?? 0), class: "think-range", "aria-label": "Thinking level" });
+    const range = h("input", { type: "range", min: 0, max: THINK.length - 1, step: 1, value: String(config.think ?? 0), class: "think-range", "aria-label": "Thinking level" });
     const marks = h("div", { class: "think-marks" }, ...THINK.map((t, i) => h("button", { type: "button", "data-i": String(i), onclick: () => set(i) }, t.name)));
     const set = (i: number) => {
       config.think = i;
       range.value = String(i);
-      range.style.setProperty("--p", `${(i / 3) * 100}%`);
+      range.style.setProperty("--p", `${(i / (THINK.length - 1)) * 100}%`);
       hint.textContent = THINK[i].hint;
       for (const b of marks.querySelectorAll<HTMLElement>("button")) b.classList.toggle("on", b.dataset.i === String(i));
+      if (thinkChip.dataset.level === String(i)) return;
       ctx.state.config = structuredClone(config);
       ctx.persist();
       paintThink();

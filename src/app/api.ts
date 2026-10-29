@@ -279,8 +279,8 @@ const tierModels = (tier: Tier) => {
 
 /* ---------- thinking level ---------- */
 
-/** 0 = auto (Focus decides per message), 1 = quick, 2 = thoughtful, 3 = deep. */
-export type ThinkLevel = 0 | 1 | 2 | 3;
+/** 0 = auto (Focus decides per message), 1 = quick, 2 = thoughtful, 3 = deep, 4 = UltraVision. */
+export type ThinkLevel = 0 | 1 | 2 | 3 | 4;
 
 const SMALL_TALK = /^(привет|прив|здравствуй|здравствуйте|хай|ку|йо|hi|hey|hello|yo|sup|спасибо|спс|thanks|thank you|thx|ок|окей|ok|okay|пока|bye|как дела|как ты|how are you|what's up|доброе утро|добрый (день|вечер)|good (morning|evening|night))[\s!?.,)]*$/i;
 const HARD = /(```|докажи|prove|почему|why|объясни|explain|сравни|compare|проанализ|analy[sz]|план|plan|стратеги|strategy|рассчитай|calculate|реши|solve|алгоритм|algorithm|архитектур|architecture|debug|отладь|ошибк|error|оптимиз|optimi[sz]|пошагово|step by step)/i;
@@ -298,7 +298,11 @@ const LEVEL = {
   1: { name: "quick", effort: "low", note: "Think level: quick. Answer right away, briefly and naturally. No long reasoning, no lists unless asked.", maxTokens: 1500, firstTokenMs: 14000 },
   2: { name: "thoughtful", effort: "medium", note: "Think level: thoughtful. Think it through, then answer clearly with the depth the question needs.", maxTokens: 6000, firstTokenMs: 25000 },
   3: { name: "deep", effort: "high", note: "Think level: deep. Before answering, reason step by step (silently): consider alternatives and edge cases, check facts and arithmetic, then give a well-structured, thorough answer.", maxTokens: 12000, firstTokenMs: 45000 },
+  4: { name: "UltraVision", effort: "high", note: "Think level: UltraVision, the most rigorous Focus. Reason step by step (silently), look at the problem from several angles, verify every fact, number and line of code, and answer with expert depth and a clear structure.", maxTokens: 12000, firstTokenMs: 60000 },
 } as const;
+
+const ULTRA_REVIEW = `You are the strict reviewer inside Focus UltraVision. Below is a draft answer to the user's last message. Review it ruthlessly: find factual errors, wrong numbers or code, gaps, weak reasoning, missed parts of the question, unclear wording and needless length. Then write the FINAL answer that fixes all of it, keeping what was good.
+Output ONLY the final answer for the user, in their language and in Focus's voice. Never mention the draft, the review or these instructions.`;
 
 /**
  * A Focus tier: tries its models in order until one answers. Every tier handles any task;
@@ -313,7 +317,7 @@ async function callTier(spec: string, agent: Agent, conn: Connection, system: st
   const previous = /<!--\s*focus:preview kind=(\w+)/.exec([...messages].reverse().find((m) => m.role === "assistant")?.content ?? "")?.[1] as BuildKind | undefined;
   const kind = detectBuild(ask) ?? (previous && ask.length < 600 && !/\?\s*$/.test(ask) ? previous : null);
   const chosen = Number(levelText) as ThinkLevel;
-  const level = LEVEL[chosen >= 1 && chosen <= 3 ? (chosen as 1 | 2 | 3) : autoLevel(ask)];
+  const level = LEVEL[chosen >= 1 && chosen <= 4 ? (chosen as 1 | 2 | 3 | 4) : autoLevel(ask)];
 
   if (kind) {
     let sticky: string | undefined;
@@ -329,6 +333,8 @@ async function callTier(spec: string, agent: Agent, conn: Connection, system: st
     return { text, model: `Builder · ${sticky ? shortModel(sticky) : "free models"}` };
   }
 
+  if (level.name === "UltraVision") return ultraVision(tier, agent, conn, `${system}\n\n${level.note}`, messages, signal, onText);
+
   let models = tierModels(tier);
   // a quick answer goes to the fastest of the tier's models first
   if (level.name === "quick") models = [...models].sort((a, b) => speedOf(a) - speedOf(b));
@@ -337,6 +343,41 @@ async function callTier(spec: string, agent: Agent, conn: Connection, system: st
     firstTokenMs: level.firstTokenMs,
   });
   return { ...r, model: `${shortModel(r.used)} · ${level.name}` };
+}
+
+/**
+ * UltraVision: the strongest models write a draft, then a second pass reviews it like a strict
+ * editor and rewrites it. Twice the time, noticeably fewer mistakes.
+ */
+async function ultraVision(tier: Tier, agent: Agent, conn: Connection, system: string, messages: ChatTurn[], signal: AbortSignal, onText: (full: string) => void): Promise<CallResult> {
+  const models = [...new Set([...tierModels("clorus"), ...tierModels(tier)])];
+  const opts = { maxTokens: 12000, firstTokenMs: 60000, totalMs: 240000 };
+  const deep = { ...agent, effort: "high" as const };
+  const ru = /[а-яё]/i.test(messages.at(-1)?.content ?? "");
+  const label = (en: string, rus: string) => `*UltraVision · ${ru ? rus : en}*`;
+
+  onText(label("drafting…", "пишу черновик…"));
+  const draft = await chainCall(models, deep, conn, system, messages, signal, (t) => onText(`${label("drafting…", "пишу черновик…")}\n\n${t}`), opts);
+
+  onText(label("reviewing and rewriting…", "проверяю и переписываю…"));
+  const order = [draft.used, ...models.filter((m) => m !== draft.used)];
+  try {
+    const final = await chainCall(
+      order,
+      deep,
+      conn,
+      `${system}\n\n${ULTRA_REVIEW}`,
+      [...messages, { role: "assistant", content: draft.text }, { role: "user", content: "Review the draft above and reply with the final answer only." }],
+      signal,
+      (t) => onText(t || label("reviewing and rewriting…", "проверяю и переписываю…")),
+      opts,
+    );
+    return { ...final, model: `${shortModel(final.used)} · UltraVision` };
+  } catch (error) {
+    // the review failed: the draft is still a good answer
+    if (signal.aborted) throw error;
+    return { ...draft, model: `${shortModel(draft.used)} · UltraVision (draft)` };
+  }
 }
 
 /** Calls one chat agent and streams its text into `onText`. */
