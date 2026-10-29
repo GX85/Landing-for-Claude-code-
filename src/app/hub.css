@@ -491,3 +491,94 @@ html.dark .tier-thumb {
 .code-head > :first-child {
   margin-right: auto;
 }
+
+/* ======================================================================
+   Fixes: header bleed-through, focused fields in dark, tables, long text
+   ====================================================================== */
+
+.main-head {
+  height: 68px;
+  background: linear-gradient(to bottom, var(--scroll-edge) 58%, transparent);
+}
+.chat-scroll {
+  padding-top: 68px;
+}
+.head-title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.head-left {
+  flex: 1 1 auto;
+}
+.head-actions {
+  flex: none;
+}
+
+/* a focused field keeps the theme's own surface (it used to flash white in dark) */
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  background: var(--card);
+}
+
+.md .table-wrap {
+  max-width: 100%;
+  margin: 0.9em 0;
+  overflow-x: auto;
+  border-radius: 12px;
+  box-shadow: 0 0 0 1px var(--line);
+}
+.md table {
+  width: 100%;
+  margin: 0;
+  border-collapse: collapse;
+  font-size: 0.94em;
+}
+.md th,
+.md td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+.md th {
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.md tr:last-child td {
+  border-bottom: 0;
+}
+.md img,
+.md video {
+  max-width: 100%;
+  height: auto;
+}
+.md .code-block {
+  max-width: 100%;
+}
+.md a {
+  overflow-wrap: anywhere;
+}
+html.dark .app-root .md a {
+  color: #6cb2ff;
+}
+html.dark .app-root .md code {
+  background: rgba(255, 255, 255, 0.09);
+}
+
+/* the phone header: fewer round buttons, nothing wraps */
+@media (max-width: 640px) {
+  .main-head {
+    padding: 0 10px;
+    gap: 6px;
+  }
+  .head-actions {
+    gap: 4px;
+  }
+  .head-actions .sound-btn {
+    display: none;
+  }
+}

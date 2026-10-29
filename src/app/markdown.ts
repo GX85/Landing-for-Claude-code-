@@ -14,6 +14,13 @@ DOMPurify.addHook("afterSanitizeAttributes", (node) => {
 export function renderMarkdown(el: HTMLElement, source: string): void {
   const html = marked.parse(source, { async: false });
   el.innerHTML = DOMPurify.sanitize(html, { FORBID_TAGS: ["style", "form", "input", "button"], FORBID_ATTR: ["style"] });
+  // wide tables scroll sideways inside their own box instead of squeezing words apart
+  for (const table of el.querySelectorAll("table")) {
+    const wrap = document.createElement("div");
+    wrap.className = "table-wrap";
+    table.replaceWith(wrap);
+    wrap.append(table);
+  }
   for (const pre of el.querySelectorAll("pre")) {
     const code = pre.querySelector("code");
     const lang = /language-([\w+-]+)/.exec(code?.className ?? "")?.[1] ?? "";

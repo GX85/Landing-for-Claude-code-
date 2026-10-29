@@ -115,7 +115,7 @@ async function callFree(model: string, system: string, messages: ChatTurn[], sig
     const [host, ...rest] = full.split("/");
     const id = rest.join("/");
     const res = await fetch(FREE_URLS[host], { method: "POST", headers: { "content-type": "application/json" }, body: body(id), signal });
-    if (!res.ok || !res.body) throw new Error(`The free model answered ${res.status}.`);
+    if (!res.ok || !res.body) throw new Error(res.status === 429 ? "The free server is busy right now (rate limit)." : `The free model answered ${res.status}.`);
     const { text } = await readSse(res, (t) => onText(stripThinking(t)));
     const clean = stripThinking(text).trim();
     if (!clean) throw new Error("The free model sent an empty answer.");
@@ -166,6 +166,7 @@ async function callTier(tier: Tier, agent: Agent, conn: Connection, system: stri
   const attempts = [...(own || serverOpenRouter !== false ? t.or.slice(0, 2).map((m) => `openrouter/${m}`) : []), ...t.free];
   let last: unknown;
   for (const model of attempts) {
+    if (model.startsWith("openrouter/") && !own && serverOpenRouter === false) continue;
     try {
       onText("");
       const r = await callAgent({ ...agent, model }, conn, system, messages, signal, onText);
@@ -177,7 +178,8 @@ async function callTier(tier: Tier, agent: Agent, conn: Connection, system: stri
       if (model.startsWith("openrouter/") && !own && /FOCUS_OPENROUTER_KEY|needs Focus/.test(String((error as Error).message))) serverOpenRouter = false;
     }
   }
-  throw last instanceof Error ? last : new Error("No free model answered. Try again in a minute.");
+  const why = last instanceof Error ? last.message : "";
+  throw new Error(`No free model answered right now${why ? ` (${why.replace(/\.$/, "")})` : ""}. Wait a minute and try again, or add your own key in Connections.`);
 }
 
 /** Calls one chat agent and streams its text into `onText`. */
