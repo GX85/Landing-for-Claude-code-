@@ -20,7 +20,7 @@ export interface CallResult {
 }
 
 function agentPayload(agent: Agent, conn: Connection) {
-  return { provider: conn.provider, kind: agent.kind, model: agent.model, apiKey: conn.apiKey, baseUrl: conn.baseUrl, effort: agent.effort };
+  return { provider: conn.provider, kind: agent.kind, model: agent.model, apiKey: conn.apiKey, baseUrl: conn.baseUrl, effort: agent.effort, temperature: agent.temperature };
 }
 
 async function errorFrom(res: Response): Promise<Error> {
@@ -102,11 +102,12 @@ const stripThinking = (text: string) => text.replace(/<think>[\s\S]*?(<\/think>|
  * visitor gets their own fair-use quota. Falling back to other models is the
  * caller's job (see chainCall).
  */
-async function callFree(model: string, system: string, messages: ChatTurn[], signal: AbortSignal, onText: (full: string) => void, maxTokens = 8000): Promise<CallResult> {
+async function callFree(model: string, system: string, messages: ChatTurn[], signal: AbortSignal, onText: (full: string) => void, maxTokens = 8000, temperature?: number): Promise<CallResult> {
   const body = (id: string) =>
     JSON.stringify({
       model: id,
       stream: true,
+      ...(temperature !== undefined ? { temperature } : {}),
       // LLM7 counts the requested maximum against a small daily quota per visitor, so only
       // Pollinations is told a size; LLM7 uses its own default and the Builder continues cut-off code
       ...(model.startsWith("pollinations/") ? { max_tokens: maxTokens } : {}),
@@ -214,6 +215,9 @@ async function callInArtifact(agent: Agent, system: string, messages: ChatTurn[]
 }
 
 let serverOpenRouter: boolean | undefined;
+let serverPool = 0;
+/** How many free-tier provider keys the Focus server holds (from /api/auth?a=me). */
+export const setServerPool = (n: number) => (serverPool = n);
 let orPausedUntil = 0;
 
 /** A Focus tier: tries its OpenRouter models, then keyless free ones, until one answers. */
@@ -278,7 +282,13 @@ async function chainCall(
 const tierModels = (tier: Tier) => {
   const t = TIERS[tier];
   const own = userConnections.some((c) => c.provider === "openrouter" && c.apiKey);
-  return [...(own || serverOpenRouter !== false ? t.or.slice(0, 2).map((m) => `openrouter/${m}`) : []), ...t.free, "server/openai-fast"];
+  return [
+    ...(own || serverOpenRouter !== false ? t.or.slice(0, 2).map((m) => `openrouter/${m}`) : []),
+    // the server's own free-tier keys (Groq, Gemini…) are faster and roomier than the keyless hosts
+    ...(serverPool > 0 ? ["server/pool"] : []),
+    ...t.free,
+    "server/openai-fast",
+  ];
 };
 
 /* ---------- thinking level ---------- */
@@ -325,7 +335,7 @@ async function callTier(spec: string, agent: Agent, conn: Connection, system: st
 
   if (kind) {
     let sticky: string | undefined;
-    const models = [...new Set([...tierModels("clorus"), ...tierModels(tier)])];
+    const models = [...new Set([...(agent.prefer ? [`openrouter/${agent.prefer}`] : []), ...tierModels("clorus"), ...tierModels(tier)])];
     const call: BuildCall = async (sys, msgs, cb, maxTokens) => {
       const order = sticky ? [sticky, ...models.filter((m) => m !== sticky)] : models;
       // the Focus personality sets the tone; the builder's rules come last so they win
@@ -342,6 +352,8 @@ async function callTier(spec: string, agent: Agent, conn: Connection, system: st
   let models = tierModels(tier);
   // a quick answer goes to the fastest of the tier's models first
   if (level.name === "quick") models = [...models].sort((a, b) => speedOf(a) - speedOf(b));
+  // an agent built in Focus tries the model its owner picked before anything else
+  if (agent.prefer) models = [`openrouter/${agent.prefer}`, ...models.filter((m) => m !== `openrouter/${agent.prefer}`)];
   const r = await chainCall(models, { ...agent, effort: level.effort }, conn, `${system}\n\n${level.note}`, messages, signal, onText, {
     maxTokens: level.maxTokens,
     firstTokenMs: level.firstTokenMs,
@@ -354,7 +366,7 @@ async function callTier(spec: string, agent: Agent, conn: Connection, system: st
  * editor and rewrites it. Twice the time, noticeably fewer mistakes.
  */
 async function ultraVision(tier: Tier, agent: Agent, conn: Connection, system: string, messages: ChatTurn[], signal: AbortSignal, onText: (full: string) => void): Promise<CallResult> {
-  const models = [...new Set([...tierModels("clorus"), ...tierModels(tier)])];
+  const models = [...new Set([...(agent.prefer ? [`openrouter/${agent.prefer}`] : []), ...tierModels("clorus"), ...tierModels(tier)])];
   const opts = { maxTokens: 12000, firstTokenMs: 60000, totalMs: 240000 };
   const deep = { ...agent, effort: "high" as const };
   const ru = /[а-яё]/i.test(messages.at(-1)?.content ?? "");
@@ -401,7 +413,7 @@ export async function callAgent(
     const own = userConnections.find((c) => c.provider === "openrouter" && c.apiKey);
     if (own) return callAgent({ ...agent, model: agent.model.slice("openrouter/".length) }, own, system, messages, signal, onText, opts);
   }
-  if (conn.provider === "focus" && agent.kind === "chat" && /^(llm7|pollinations)\//.test(agent.model)) return callFree(agent.model, system, messages, signal, onText, opts.maxTokens);
+  if (conn.provider === "focus" && agent.kind === "chat" && /^(llm7|pollinations)\//.test(agent.model)) return callFree(agent.model, system, messages, signal, onText, opts.maxTokens, agent.temperature);
 
   const res = await fetch("/api/run", {
     method: "POST",

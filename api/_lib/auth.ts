@@ -1,4 +1,5 @@
 import { createHash, createHmac, randomInt, timingSafeEqual } from "node:crypto";
+import { freePool } from "./providers.js";
 
 /**
  * Stateless sign-in: everything lives in HMAC-signed, HttpOnly cookies, so no
@@ -210,7 +211,7 @@ function checkCode(request: Request, code: string): Response {
 export async function handleAuth(request: Request): Promise<Response> {
   const a = new URL(request.url).searchParams.get("a") ?? "me";
   const on = providers();
-  if (a === "me") return json({ enabled: authEnabled(), providers: on, user: currentUser(request) ?? null });
+  if (a === "me") return json({ enabled: authEnabled(), providers: on, user: currentUser(request) ?? null, pool: freePool().length });
   if (a === "logout") return json({ ok: true }, 200, cookie(request, SESSION, "", 0));
   if ((a === "github" || a === "github-callback") && !on.github) return json({ error: "GitHub sign-in isn't set up." }, 404);
   if ((a === "google" || a === "google-callback") && !on.google) return json({ error: "Google sign-in isn't set up." }, 404);

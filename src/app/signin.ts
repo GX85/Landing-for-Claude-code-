@@ -9,6 +9,7 @@ export interface AuthUser {
 }
 
 interface AuthInfo {
+  pool?: number;
   enabled: boolean;
   providers: { github: boolean; google: boolean; email: boolean };
   user: AuthUser | null;

@@ -162,6 +162,7 @@ class Run {
       agentName: agent.name,
       avatar: agent.avatar,
       provider: this.ctx.connectionOf(agent)?.provider,
+      mascot: agent.id.startsWith("fa-") ? agent.color : undefined,
       color: agent.color,
       phase,
       status: "running",

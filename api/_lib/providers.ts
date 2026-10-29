@@ -56,6 +56,8 @@ export interface AgentConfig {
   /** Claude only. */
   effort?: Effort;
   kind: AgentKind;
+  /** OpenAI-compatible models: sampling temperature (0–2). */
+  temperature?: number;
 }
 
 export interface ImagePart {
@@ -155,11 +157,12 @@ async function runFocus(input: RunInput): Promise<RunResult> {
   if (key) {
     return runOpenAICompatible({ ...input, agent: { ...input.agent, provider: "pollinations", apiKey: key, model: FOCUS_FREE_MODEL } });
   }
-  // keyless: try several free hosts from the server, for visitors whose browser can't reach them
+  // free-tier keys the site owner added (Groq, Cerebras, Gemini, Mistral…), shuffled to spread
+  // the load, then keyless hosts: each one adds its own daily allowance to Focus's total
   let last: unknown;
-  for (const [url, model] of FREE_SERVER_MODELS) {
+  for (const [url, model, key] of [...shuffle(freePool()), ...FREE_SERVER_MODELS.map(([u, m]) => [u, m, ""] as [string, string, string])]) {
     try {
-      return await streamFree(url, model, input);
+      return await streamFree(url, model, input, key);
     } catch (error) {
       if (input.signal?.aborted) throw error;
       last = error;
@@ -168,6 +171,20 @@ async function runFocus(input: RunInput): Promise<RunResult> {
   throw last instanceof UserError ? last : new UserError("The free models are unavailable right now. Try again shortly, or add your own key in Connections.", 502);
 }
 
+/** Free-tier providers Focus can use when the owner sets their keys. Each key = more free messages a day. */
+const POOL: { env: string; url: string; model: string }[] = [
+  { env: "FOCUS_GROQ_KEY", url: "https://api.groq.com/openai/v1/chat/completions", model: "llama-3.3-70b-versatile" },
+  { env: "FOCUS_CEREBRAS_KEY", url: "https://api.cerebras.ai/v1/chat/completions", model: "llama-3.3-70b" },
+  { env: "FOCUS_GEMINI_KEY", url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", model: "gemini-2.5-flash" },
+  { env: "FOCUS_MISTRAL_KEY", url: "https://api.mistral.ai/v1/chat/completions", model: "mistral-small-latest" },
+  { env: "FOCUS_SAMBANOVA_KEY", url: "https://api.sambanova.ai/v1/chat/completions", model: "Meta-Llama-3.3-70B-Instruct" },
+];
+
+export const freePool = (): [string, string, string][] =>
+  POOL.flatMap((p) => (process.env[p.env]?.trim() ? [[p.url, process.env[`${p.env}_MODEL`]?.trim() || p.model, process.env[p.env]!.trim()] as [string, string, string]] : []));
+
+const shuffle = <T>(list: T[]): T[] => list.map((v) => [Math.random(), v] as const).sort((a, b) => a[0] - b[0]).map(([, v]) => v);
+
 const FREE_SERVER_MODELS: [string, string][] = [
   ["https://api.llm7.io/v1/chat/completions", "nemotron-3-nano:30b"],
   ["https://api.llm7.io/v1/chat/completions", "mistral-Nemo-Instruct-2407"],
@@ -175,14 +192,14 @@ const FREE_SERVER_MODELS: [string, string][] = [
 ];
 
 /** One keyless, OpenAI-style streaming call. Gives up if nothing arrives within 15 s. */
-async function streamFree(url: string, freeModel: string, { system, messages, signal, onText }: RunInput): Promise<RunResult> {
+async function streamFree(url: string, freeModel: string, { system, messages, signal, onText }: RunInput, key = ""): Promise<RunResult> {
   const quiet = new AbortController();
   const timer = setTimeout(() => quiet.abort(), 15000);
   const signals = [quiet.signal, AbortSignal.timeout(REQUEST_TIMEOUT_MS), ...(signal ? [signal] : [])];
   try {
     const res = await fetch(url, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...(key ? { authorization: `Bearer ${key}` } : {}) },
       body: JSON.stringify({
         model: freeModel,
         stream: true,
@@ -323,6 +340,7 @@ async function runOpenAICompatibleOnce({ agent, system, messages, signal, onText
   const stream = await openAIClient(agent).chat.completions.create(
     {
       ...(effort ? (agent.provider === "openrouter" ? { reasoning: { effort } } : { reasoning_effort: effort as "low" | "medium" | "high" }) : {}),
+      ...(agent.temperature !== undefined ? { temperature: agent.temperature } : {}),
       model: agent.model,
       messages: [
         ...(system ? [{ role: "system" as const, content: system }] : []),
@@ -547,6 +565,7 @@ export function parseAgent(value: unknown): AgentConfig {
     apiKey: str(a.apiKey, 500),
     baseUrl: str(a.baseUrl, 2000) || undefined,
     effort: ["low", "medium", "high", "xhigh", "max"].includes(effort) ? effort : undefined,
+    temperature: typeof a.temperature === "number" && a.temperature >= 0 && a.temperature <= 2 ? a.temperature : undefined,
   };
 }
 

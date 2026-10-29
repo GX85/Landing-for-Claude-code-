@@ -49,7 +49,7 @@ function toggle(checked: boolean, label: string, onChange: (on: boolean) => void
 
 /* ---------- agents ---------- */
 
-interface OrModel {
+export interface OrModel {
   id: string;
   name: string;
   free: boolean;
@@ -58,7 +58,7 @@ let orModels: OrModel[] | undefined;
 let orLoading = false;
 
 /** OpenRouter's public model list, loaded once; the page re-renders when it arrives. */
-function openRouterCatalog(onLoad: () => void): OrModel[] {
+export function openRouterCatalog(onLoad: () => void): OrModel[] {
   if (orModels) return orModels;
   if (!orLoading) {
     orLoading = true;

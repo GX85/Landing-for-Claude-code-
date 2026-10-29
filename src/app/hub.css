@@ -939,3 +939,297 @@ html.dark .app-root .md code {
     animation: none;
   }
 }
+
+/* ======================================================================
+   Agents built in Focus
+   ====================================================================== */
+.mascot {
+  display: block;
+  flex: none;
+}
+.mascot-avatar {
+  background: none !important;
+  border-radius: 0;
+}
+.agent-chip {
+  gap: 7px;
+  padding: 0 10px 0 7px;
+  font-size: 13px;
+  font-weight: 650;
+  min-width: 0;
+}
+.agent-chip .agent-chip-name {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agent-chip:not(.is-agent) .agent-chip-name {
+  display: none;
+}
+.agent-chip.is-agent {
+  box-shadow: inset 0 0 0 1px hsl(var(--h) 90% 60% / 0.4);
+}
+.agent-menu .menu-item .mascot,
+.agent-menu .menu-item .focus-mark {
+  flex: none;
+}
+.hello-logo.is-agent::before {
+  opacity: 0.35;
+  animation: none;
+}
+
+.ma .page-lede {
+  max-width: 62ch;
+}
+.ma-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+}
+.ma-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 22px 14px 16px;
+  border: 0;
+  border-radius: 20px;
+  background: var(--card);
+  box-shadow: 0 0 0 1px var(--line);
+  color: var(--ink);
+  font: inherit;
+  text-align: center;
+}
+.ma-open {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.ma-card b {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+}
+.ma-card small {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-3);
+  font-size: 12px;
+}
+.ma-new {
+  justify-content: center;
+  min-height: 170px;
+  cursor: pointer;
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--ink) 18%, transparent);
+}
+.ma-plus {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+}
+.ma-chat {
+  width: 100%;
+}
+.ma-editor {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 22px;
+  align-items: start;
+}
+.ma-preview {
+  position: sticky;
+  top: 80px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 26px 18px 18px;
+  border-radius: 22px;
+  background: var(--card);
+  box-shadow: 0 0 0 1px var(--line);
+  text-align: center;
+}
+.ma-pv-name {
+  margin: 4px 0 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-size: 20px;
+}
+.ma-pv-model {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+.ma-pv-starters {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+.ma-pv-starters span {
+  max-width: 100%;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ma-start {
+  width: 100%;
+  margin-top: 6px;
+}
+.ma-form {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+.ma-swatches {
+  flex-wrap: wrap;
+}
+.ma-custom {
+  position: relative;
+  overflow: hidden;
+  background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red);
+  cursor: pointer;
+}
+.ma-custom input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.ma-seg {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ma-seg button {
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.ma-seg button[aria-checked="true"] {
+  background: var(--ink);
+  color: var(--bg);
+}
+.ma-seg .tier-clorus {
+  font-size: 20px;
+  padding-block: 4px;
+}
+.ma-model {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.ma-model input[type="search"] {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: var(--field);
+  font-size: 14px;
+}
+.ma-models {
+  display: grid;
+  max-height: 260px;
+  overflow-y: auto;
+  border-radius: 12px;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.ma-model-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  padding: 9px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.ma-model-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ma-model-row em {
+  flex: none;
+  font-style: normal;
+  font-size: 11px;
+  color: var(--ink-3);
+}
+.ma-model-row em.ma-free {
+  color: var(--ok);
+  font-weight: 700;
+}
+.ma-model-row:hover,
+.ma-model-row.on {
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+}
+.ma-model-row.on span {
+  font-weight: 700;
+}
+.ma-ends {
+  display: flex;
+  justify-content: space-between;
+  color: var(--ink-3);
+  font-size: 12px;
+}
+.ma-starters {
+  display: grid;
+  gap: 8px;
+}
+.ma-form textarea,
+.ma-form input:not([type]),
+.ma-starters input {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: var(--field);
+  font-size: 14px;
+}
+.ma-form textarea {
+  resize: vertical;
+}
+@media (max-width: 760px) {
+  .ma-editor {
+    grid-template-columns: 1fr;
+  }
+  .ma-preview {
+    position: static;
+  }
+}

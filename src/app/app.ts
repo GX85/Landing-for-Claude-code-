@@ -1,4 +1,5 @@
 import { signedInUser, signOut } from "./signin";
+import { renderMyAgents } from "./myagents";
 import { applyHub, focusMark } from "./brand";
 import "./app.css";
 import "./hub.css";
@@ -136,7 +137,8 @@ function renderSidebar(): void {
     h(
       "nav",
       { class: "side-nav", "aria-label": "Sections" },
-      navLink("Agents", "agents", { name: "agents" }, r.name === "agents"),
+      navLink("Agents", "agents", { name: "builder" }, r.name === "builder"),
+      navLink("Team", "council", { name: "agents" }, r.name === "agents"),
       navLink("Connections", "key", { name: "connections" }, r.name === "connections"),
       navLink("Modes", "modes", { name: "modes" }, r.name === "modes"),
     ),
@@ -251,8 +253,12 @@ export function show(el: HTMLElement, route: Route, go: Go): void {
   applyHub(state.config.hub ?? "focus");
   main.scrollTop = 0;
   switch (route.name) {
-    case "agents":
+    case "builder":
       document.title = "Agents · Focus";
+      renderMyAgents(main, ctx, route.id);
+      break;
+    case "agents":
+      document.title = "Team · Focus";
       renderAgents(main, ctx);
       break;
     case "connections":

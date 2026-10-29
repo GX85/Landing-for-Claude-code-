@@ -6,6 +6,7 @@ import "./sections.css";
 import "./dark.css";
 import { themeButton } from "./theme";
 import { focusMark } from "./mark";
+import { agentMascot } from "./mascot";
 import "@fontsource/playfair-display/latin-900.css";
 
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -797,12 +798,7 @@ export function initSections(el: HTMLElement): void {
   setupBuildDemo();
   root.querySelectorAll("[data-mark]").forEach((el) => el.replaceWith(focusMark(26)));
   root.querySelectorAll<HTMLElement>(".skill-chips b").forEach((b, i) => b.style.setProperty("--i", String(i)));
-  const clawd = root.querySelector<HTMLElement>(".clawd");
-  clawd?.addEventListener("click", () => {
-    clawd.classList.remove("wave");
-    void clawd.offsetWidth;
-    clawd.classList.add("wave");
-  });
+  root.querySelectorAll("[data-mascot]").forEach((el) => el.replaceChildren(agentMascot("#ffffff", 34)));
   setupReveal();
   setupCounters();
   setupMarquee();

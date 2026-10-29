@@ -7,7 +7,8 @@ import { generateGreeting, resolveMedia, setConnections, type ImagePart } from "
 import { modeInfo, MODES, startRun } from "./modes";
 import { click, setSound } from "./sound";
 import { agentAvatar, applyHub, focusMark } from "./brand";
-import { allSkills, connectionOf, isReady, KIND_LABEL, missing, newConnection, PERSONA, PROVIDERS, TIER_ORDER, TIERS, uid, type Agent, type Attachment, type Chat, type ChatConfig, type Hub, type Message, type StepRecord, type Tier } from "./store";
+import { agentMascot } from "../mascot";
+import { allSkills, connectionOf, isReady, KIND_LABEL, missing, newConnection, PERSONA, PROVIDERS, TIER_ORDER, TIERS, uid, type Agent, type Attachment, type Chat, type ChatConfig, type FocusAgent, type Hub, type Message, type StepRecord, type Tier } from "./store";
 
 const SCENE_VIDEO = "https://d2ol7oe51mr4n9.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/175fbbcd-e50a-480c-bab2-ca16d4678322.mp4";
 const SCENE_POSTER = "https://d2ol7oe51mr4n9.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/726b168c-da47-4682-a255-cc3e02f89bae.jpg";
@@ -121,7 +122,19 @@ export function renderChat(main: HTMLElement, ctx: Ctx, chat: Chat | undefined):
     };
     onHubChange = () => paint(true);
     paint(false);
-    main.replaceChildren(head, h("div", { class: "hello" }, h("div", { class: "hello-logo", "aria-hidden": "true" }, waveMark(76)), title, composer, sugg));
+    const logo = h("div", { class: "hello-logo", "aria-hidden": "true" });
+    const paintLogo = () => {
+      const fa = hubOf(config) === "focus" ? focusAgentOf(ctx, config) : undefined;
+      logo.classList.toggle("is-agent", !!fa);
+      logo.replaceChildren(fa ? agentMascot(fa.color, 76) : waveMark(76));
+    };
+    paintLogo();
+    const repaint = onHubChange;
+    onHubChange = () => {
+      paintLogo();
+      repaint?.();
+    };
+    main.replaceChildren(head, h("div", { class: "hello" }, logo, title, composer, sugg));
     return;
   }
 
@@ -176,6 +189,13 @@ function fillInput(main: HTMLElement, text: string): void {
 
 /** The starter chips under the composer: tier-specific in Focus, mode-specific in Aeronus. */
 function suggestionsFor(ctx: Ctx, config: ChatConfig, main: HTMLElement, chat: Chat | undefined): Node[] {
+  const fa = hubOf(config) === "focus" ? focusAgentOf(ctx, config) : undefined;
+  const starters = fa?.starters.filter((s) => s.trim()) ?? [];
+  if (fa && starters.length) {
+    return starters.map((text) =>
+      h("button", { class: "suggestion", type: "button", onclick: () => fillInput(main, text) }, h("span", { class: "suggestion-mode" }, agentMascot(fa.color, 15), fa.name), h("span", {}, text)),
+    );
+  }
   if (hubOf(config) === "focus") {
     return TIER_SUGGESTIONS[config.tier].map((text) =>
       h(
@@ -237,6 +257,40 @@ const THINK: { name: string; short?: string; hint: string }[] = [
 ];
 
 const TIER_COLORS: Record<Tier, string> = { storm: "#e5484d", gen: "#8b5cf6", clorus: "#f59e0b" };
+
+/** The Focus agent a chat talks to, if one is chosen and still exists. */
+const focusAgentOf = (ctx: Ctx, config: ChatConfig): FocusAgent | undefined => (config.agentId ? ctx.state.focusAgents.find((a) => a.id === config.agentId) : undefined);
+
+const STYLE_NOTE: Record<FocusAgent["style"], string> = {
+  short: "Keep answers short: a few sentences or a tight list unless asked for more.",
+  balanced: "Match the length to the question.",
+  detailed: "Give thorough, well-structured answers with examples.",
+};
+
+/** An agent the user built, as a runnable agent: its own personality on top of Focus's brain. */
+function builtAgent(ctx: Ctx, fa: FocusAgent): Agent {
+  const base = tierAgent(ctx, fa.tier, fa.think);
+  const identity = `You are ${fa.name || "an agent"}, a custom AI agent the user built in Focus (by Team Swift).`;
+  const skills = allSkills(ctx.state)
+    .filter((sk) => fa.skills.includes(sk.id) && sk.instructions.trim())
+    .map((sk) => `Skill, ${sk.name}: ${sk.instructions.trim()}`);
+  return {
+    ...base,
+    id: `fa-${fa.id}`,
+    name: fa.name || "Agent",
+    color: fa.color,
+    role: [
+      PERSONA.replace(/^You are Focus[^\n]*/, identity),
+      fa.instructions.trim() ? `How your user designed you (follow this closely):\n${fa.instructions.trim()}` : "",
+      STYLE_NOTE[fa.style],
+      ...skills,
+    ]
+      .filter(Boolean)
+      .join("\n\n"),
+    prefer: fa.model || undefined,
+    temperature: Math.round((0.2 + fa.creativity * 1.0) * 100) / 100,
+  };
+}
 
 /** Focus chats run one assistant per tier; it is made on the fly and never listed on the Agents page. */
 function tierAgent(ctx: Ctx, tier: Tier, think = 0): Agent {
@@ -626,7 +680,8 @@ function historyBefore(chat: Chat, userMsg: Message): ChatTurn[] {
 async function runTurn(ctx: Ctx, chat: Chat, userMsg: Message): Promise<void> {
   // Focus: one assistant per tier. Aeronus (and chats from before hubs existed): the whole team.
   const focusHub = chat.config.hub === "focus";
-  const tier = focusHub ? tierAgent(ctx, chat.config.tier, chat.config.think ?? 0) : undefined;
+  const built = focusHub ? focusAgentOf(ctx, chat.config) : undefined;
+  const tier = built ? builtAgent(ctx, built) : focusHub ? tierAgent(ctx, chat.config.tier, chat.config.think ?? 0) : undefined;
   const team = tier ? [tier] : teamOf(ctx, chat.config);
   const lead = tier ?? leadOf(ctx, chat.config, team);
   const mode = focusHub ? "solo" : chat.config.mode;
@@ -948,8 +1003,45 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onH
   paintThink();
   let shownHub: Hub | undefined;
 
+  // who to talk to in Focus: Focus itself or one of the user's agents
+  const agentMenu = () => {
+    const pickAgent = (id: string | undefined) => {
+      config.agentId = id;
+      changed();
+      applyHub(hubOf(config));
+      onHubChange?.();
+      closePopover();
+    };
+    const row = (id: string | undefined, art: Node, name: string, sub: string) =>
+      h("button", { class: `menu-item${config.agentId === id ? " selected" : ""}`, type: "button", onclick: () => pickAgent(id) }, art, h("span", { class: "menu-text" }, h("strong", {}, name), h("small", {}, sub)), config.agentId === id ? icon("check", 16) : null);
+    return h(
+      "div",
+      { class: "menu agent-menu" },
+      h("div", { class: "menu-title" }, "Talk to"),
+      row(undefined, focusMark(22), "Focus", "Storm, GEN or Clorus"),
+      ...ctx.state.focusAgents.map((a) => row(a.id, agentMascot(a.color, 22), a.name || "Agent", a.model ? a.model.replace(/:free$/, " · free") : `Focus picks · ${TIERS[a.tier].name}`)),
+      h(
+        "a",
+        {
+          class: "menu-foot",
+          href: "/app/my-agents",
+          onclick: (e: Event) => {
+            e.preventDefault();
+            closePopover();
+            ctx.go({ name: "builder" });
+          },
+        },
+        ctx.state.focusAgents.length ? "Manage agents →" : "Build your own agent →",
+      ),
+    );
+  };
+  const agentChip = h("button", { class: "chip-btn agent-chip", type: "button", "data-popover": "agent", "aria-haspopup": "dialog", title: "Talk to Focus or one of your agents", onclick: (e: Event) => openPopover(e.currentTarget as HTMLElement, agentMenu()) });
+
   const renderBar = () => {
     const hub = hubOf(config);
+    const fa = hub === "focus" ? focusAgentOf(ctx, config) : undefined;
+    agentChip.replaceChildren(fa ? agentMascot(fa.color, 18) : focusMark(16), h("span", { class: "agent-chip-name" }, fa ? fa.name || "Agent" : "Focus"), icon("chevron", 13));
+    agentChip.classList.toggle("is-agent", !!fa);
     const mode = modeInfo(config.mode);
     const team = teamOf(ctx, config);
     const lead = leadOf(ctx, config, team);
@@ -958,10 +1050,12 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onH
     tierSeg.dataset.tier = config.tier;
     for (const b of hubSwitch.querySelectorAll<HTMLElement>(".hub-opt")) b.setAttribute("aria-checked", String(b.dataset.hub === hub));
     for (const b of tierSeg.querySelectorAll<HTMLElement>(".tier-opt")) b.setAttribute("aria-checked", String(b.dataset.tier === config.tier));
-    input.placeholder = hub === "focus" ? `Ask ${TIERS[config.tier].name}…` : "Message your team…";
+    input.placeholder = hub === "focus" ? `Ask ${fa ? fa.name || "your agent" : TIERS[config.tier].name}…` : "Message your team…";
     opts.replaceChildren(
       ...(hub === "focus"
-        ? [tierSeg]
+        ? fa
+          ? [agentChip]
+          : [agentChip, tierSeg]
         : [
             h(
               "button",
@@ -988,7 +1082,7 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onH
     bar.replaceChildren(
       h("button", { class: "chip-btn icon-only", type: "button", title: "Attach images, PDFs or text files", "aria-label": "Attach files", onclick: () => fileInput.click() }, icon("clip")),
       hubSwitch,
-      ...(hub === "focus" ? [thinkChip] : []),
+      ...(hub === "focus" && !fa ? [thinkChip] : []),
       opts,
       h("span", { class: "spacer" }),
       sendBtn,

@@ -58,6 +58,26 @@ export function setModels(conn: Connection, kind: AgentKind, list: string[]): vo
 }
 
 /** A team member: a model on a connection, with a name and a role. */
+/** An agent the user designed in Focus: a personality, a model and a way of thinking. */
+export interface FocusAgent {
+  id: string;
+  name: string;
+  color: string;
+  /** Who the agent is and how it behaves, in the user's words. */
+  instructions: string;
+  /** An OpenRouter model id, or "" to let Focus pick by tier. */
+  model: string;
+  tier: Tier;
+  /** Brainstorm level: 0 auto … 4 UltraVision. */
+  think: number;
+  /** 0 precise … 1 inventive. */
+  creativity: number;
+  style: "short" | "balanced" | "detailed";
+  skills: string[];
+  starters: string[];
+  createdAt: number;
+}
+
 export interface Agent {
   id: string;
   name: string;
@@ -72,6 +92,10 @@ export interface Agent {
   skills: string[];
   /** One or two characters (or an emoji) shown in place of the initial. */
   avatar: string;
+  /** Focus agents: an OpenRouter model to try before the tier's own. */
+  prefer?: string;
+  /** Focus agents: sampling temperature. */
+  temperature?: number;
 }
 
 /** A reusable set of instructions that agents can be given. */
@@ -221,8 +245,10 @@ export type Tier = "storm" | "gen" | "clorus";
 export interface ChatConfig {
   hub: Hub;
   tier: Tier;
-  /** Thinking level for Focus: 0 auto, 1 quick, 2 thoughtful, 3 deep. */
+  /** Thinking level for Focus: 0 auto, 1 quick, 2 thoughtful, 3 deep, 4 UltraVision. */
   think?: number;
+  /** A Focus agent to talk to instead of plain Focus. */
+  agentId?: string;
   mode: ModeId;
   agentIds: string[];
   leadId: string;
@@ -231,6 +257,8 @@ export interface ChatConfig {
 
 export interface StepRecord {
   provider?: Provider;
+  /** Set for agents built in Focus: their square's colour. */
+  mascot?: string;
   avatar?: string;
   id: number;
   agentId: string;
@@ -299,6 +327,8 @@ export interface State {
   skills: Skill[];
   /** Mechanical key clicks while typing and while answers stream. */
   sound: boolean;
+  /** Agents the user built in Focus. */
+  focusAgents: FocusAgent[];
   version?: number;
 }
 
@@ -787,7 +817,7 @@ export function newAgent(connection: Connection, kind?: AgentKind): Agent {
   };
 }
 
-const STATE_VERSION = 5;
+const STATE_VERSION = 6;
 
 /** The Aeronus team out of the box: every one needs the user's own key. */
 const TEAM_PROVIDERS: Provider[] = ["anthropic", "openai", "gemini", "xai", "mistral", "qwen", "devin", "manus", "jules"];
@@ -809,6 +839,7 @@ function defaults(): State {
     sidebarCollapsed: false,
     skills: [],
     sound: true,
+    focusAgents: [],
     version: STATE_VERSION,
   };
 }
@@ -848,6 +879,8 @@ function upgrade(state: State): State {
     state.agents.push(agent);
     if (agent.kind === "chat") state.config.agentIds.push(agent.id);
   }
+  // v6: agents built in Focus
+  state.focusAgents ??= [];
   state.version = STATE_VERSION;
   return state;
 }
@@ -940,3 +973,22 @@ export function missing(state: State, agent: Agent): string | null {
 }
 
 export const isReady = (state: State, agent: Agent) => agent.enabled && !missing(state, agent);
+
+export const AGENT_COLORS = ["#ffffff", "#ff4d4d", "#ffb8ff", "#00e5ff", "#ffb852", "#2121de", "#39ff88", "#ffd60a", "#1d1d1f", "#9b5de5"];
+
+export function newFocusAgent(n: number): FocusAgent {
+  return {
+    id: uid(),
+    name: `Agent ${n}`,
+    color: AGENT_COLORS[(n - 1) % AGENT_COLORS.length],
+    instructions: "",
+    model: "",
+    tier: "gen",
+    think: 0,
+    creativity: 0.5,
+    style: "balanced",
+    skills: [],
+    starters: [],
+    createdAt: Date.now(),
+  };
+}
