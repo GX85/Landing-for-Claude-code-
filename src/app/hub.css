@@ -533,7 +533,7 @@ html.dark .tier-thumb {
 }
 
 /* a focused field keeps the theme's own surface (it used to flash white in dark) */
-.field input:focus,
+.field input:not([type="range"]):focus,
 .field select:focus,
 .field textarea:focus {
   background: var(--card);
@@ -730,51 +730,53 @@ html.dark .app-root .md code {
 .think-menu {
   width: min(320px, calc(100vw - 32px));
 }
+/* a slider whose knob and fill glide to the chosen step (they are painted from --pn, which is animated) */
+@property --pn {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
 .think-range {
-  --p: 0%;
+  --pn: 0;
+  --at: calc(11px + (100% - 22px) * var(--pn));
   width: calc(100% - 12px);
   margin: 14px 6px 6px;
-  height: 22px;
-  background: transparent;
+  height: 26px;
+  background:
+    radial-gradient(circle 9px at var(--at) 50%, #fff 8.2px, transparent 9px),
+    radial-gradient(circle 13px at var(--at) 50%, hsl(var(--h) 95% 60% / 0.35) 12.2px, transparent 13px),
+    linear-gradient(90deg, hsl(var(--h) 95% 60%) var(--at), color-mix(in srgb, var(--ink) 14%, transparent) var(--at)) center / 100% 6px no-repeat;
   -webkit-appearance: none;
   appearance: none;
+  border-radius: 99px;
   cursor: pointer;
+  transition: --pn 0.45s cubic-bezier(0.34, 1.45, 0.4, 1);
+}
+.think-range:active {
+  transition-duration: 0.07s;
 }
 .think-range::-webkit-slider-runnable-track {
-  height: 6px;
-  border-radius: 99px;
-  background: linear-gradient(90deg, hsl(var(--h) 95% 60%) var(--p), color-mix(in srgb, var(--ink) 14%, transparent) var(--p));
+  height: 26px;
+  background: transparent;
 }
 .think-range::-moz-range-track {
-  height: 6px;
-  border-radius: 99px;
-  background: color-mix(in srgb, var(--ink) 14%, transparent);
+  height: 26px;
+  background: transparent;
 }
 .think-range::-moz-range-progress {
-  height: 6px;
-  border-radius: 99px;
-  background: hsl(var(--h) 95% 60%);
+  background: transparent;
 }
 .think-range::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 22px;
-  height: 22px;
-  margin-top: -8px;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 0 0 4px hsl(var(--h) 95% 60% / 0.35), 0 4px 10px rgba(0, 0, 0, 0.35);
-  transition: transform 0.2s;
+  width: 26px;
+  height: 26px;
+  opacity: 0;
 }
 .think-range::-moz-range-thumb {
-  width: 22px;
-  height: 22px;
+  width: 26px;
+  height: 26px;
   border: 0;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 0 0 4px hsl(var(--h) 95% 60% / 0.35), 0 4px 10px rgba(0, 0, 0, 0.35);
-}
-.think-range:active::-webkit-slider-thumb {
-  transform: scale(1.12);
+  opacity: 0;
 }
 .think-marks {
   display: flex;
@@ -1603,7 +1605,7 @@ html.dark .app-root .md code {
       box-shadow: 0 14px 30px -18px rgba(0, 0, 0, 0.6);
     }
   }
-  .app-root input,
+  .app-root input:not([type="range"]),
   .app-root textarea,
   .app-root select {
     transition: box-shadow 0.25s ease, border-color 0.25s ease, background-color 0.25s ease;
@@ -1623,4 +1625,22 @@ html.dark .app-root .md code {
   .app-root .send-btn:not(:disabled):hover {
     transform: scale(1.08);
   }
+}
+
+.lang-btn {
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+}
+
+.think-menu .think-hint,
+.think-menu .think-marks {
+  margin-inline: 0;
+  padding-inline: 8px;
+}
+.think-marks button {
+  transition: color 0.3s ease, transform 0.3s cubic-bezier(0.34, 1.5, 0.4, 1);
+}
+.think-marks button.on {
+  transform: scale(1.08);
 }

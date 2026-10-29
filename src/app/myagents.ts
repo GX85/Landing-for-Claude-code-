@@ -169,7 +169,7 @@ function editor(ctx: Ctx, a: FocusAgent): HTMLElement {
   const setBrain = (i: number) => {
     a.think = i;
     brainRange.value = String(i);
-    brainRange.style.setProperty("--p", `${(i / 4) * 100}%`);
+    brainRange.style.setProperty("--pn", String(i / 4));
     brainHint.textContent = BRAIN_HINT[i];
     brainMarks.querySelectorAll<HTMLElement>("button").forEach((b) => b.classList.toggle("on", b.dataset.i === String(i)));
     save();
@@ -179,7 +179,7 @@ function editor(ctx: Ctx, a: FocusAgent): HTMLElement {
 
   // creativity
   const creative = h("input", { type: "range", min: 0, max: 100, step: 5, value: String(Math.round(a.creativity * 100)), class: "think-range", "aria-label": "Creativity" });
-  const paintCreative = () => creative.style.setProperty("--p", `${creative.value}%`);
+  const paintCreative = () => creative.style.setProperty("--pn", String(Number(creative.value) / 100));
   creative.addEventListener("input", () => {
     a.creativity = Number(creative.value) / 100;
     paintCreative();

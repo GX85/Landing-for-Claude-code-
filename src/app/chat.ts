@@ -1029,7 +1029,7 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onH
     const set = (i: number) => {
       config.think = i;
       range.value = String(i);
-      range.style.setProperty("--p", `${(i / (THINK.length - 1)) * 100}%`);
+      range.style.setProperty("--pn", String(i / (THINK.length - 1)));
       void handWrite(hint, THINK[i].hint);
       for (const b of marks.querySelectorAll<HTMLElement>("button")) b.classList.toggle("on", b.dataset.i === String(i));
       if (thinkChip.dataset.level === String(i)) return;

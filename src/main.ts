@@ -1,3 +1,4 @@
+import { initI18n } from "./i18n";
 import { hideLanding, showLanding } from "./landing";
 import { parseRoute, routePath, type Route } from "./router";
 
@@ -55,6 +56,9 @@ async function apply(route: Route): Promise<void> {
   if (current === "landing" || current === undefined) {
     hideLanding();
     appRoot.hidden = false;
+    // the window opens out of a hairline: the page behind it keeps the landing's colour instead of flashing white
+    document.body.style.background = document.documentElement.classList.contains("light") ? "#f6f5f3" : "#0a0a0c";
+    setTimeout(() => (document.body.style.background = ""), 1100);
     appRoot.classList.remove("app-enter");
     void appRoot.offsetWidth; // restart the entrance animation
     appRoot.classList.add("app-enter");
@@ -73,7 +77,7 @@ addEventListener("popstate", () => void apply(parseRoute(currentPath())));
 // the landing manages its own scroll position
 history.scrollRestoration = "manual";
 
-void apply(parseRoute(currentPath()));
+void initI18n().then(() => apply(parseRoute(currentPath())));
 
 // warm the app bundle while the landing plays
 if (parseRoute(currentPath()).name === "landing") {

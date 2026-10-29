@@ -1,5 +1,6 @@
 import type { Ctx } from "./app";
-import { h, pageHead } from "./dom";
+import { h, pageHead, slideSeg } from "./dom";
+import { getLang, setLang, type Lang } from "../i18n";
 import { openRouterCatalog, resetCatalog } from "./pages";
 import { liveModelsAt, refreshLiveModels } from "./api";
 import type { ModelChoice, ModelSource } from "./store";
@@ -141,6 +142,12 @@ export function renderSettings(main: HTMLElement, ctx: Ctx): void {
         "div",
         { class: "page-inner" },
         h("p", { class: "page-lede" }, inArtifact ? "In this Artifact chats run through Claude, so the model choice below applies to the full app at focus-agents.vercel.app." : "Choose which model answers your chats. Change it any time; it applies to new messages."),
+        h(
+          "section",
+          { class: "card set-card" },
+          h("h3", { class: "set-title" }, "Language"),
+          slideSeg<Lang>([{ value: "en", label: "English" }, { value: "ru", label: "Русский" }], getLang(), (v) => setLang(v), "Interface language"),
+        ),
         h(
           "div",
           { class: "set-update" },

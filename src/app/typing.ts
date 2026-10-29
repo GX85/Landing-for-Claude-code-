@@ -1,3 +1,5 @@
+import { tr } from "../i18n";
+
 /**
  * Text that is written by hand when something changes: the old line fades out, the new one is typed
  * letter by letter behind a blinking caret, like in Canva. A newer change always cancels an older one.
@@ -17,6 +19,7 @@ function claim(el: HTMLElement, text: string): number | undefined {
 
 /** Replaces an element's text with a fade-out, then typing. */
 export async function typeInto(el: HTMLElement, text: string): Promise<void> {
+  text = tr(text);
   const id = claim(el, text);
   if (id === undefined) return;
   const live = () => runs.get(el)?.id === id;
@@ -42,6 +45,7 @@ export async function typeInto(el: HTMLElement, text: string): Promise<void> {
 
 /** The same for a placeholder: the old one is erased backwards, the new one typed forwards. */
 export async function typePlaceholder(input: HTMLInputElement | HTMLTextAreaElement, text: string): Promise<void> {
+  text = tr(text);
   const id = claim(input, text);
   if (id === undefined) return;
   const live = () => runs.get(input)?.id === id;
@@ -63,7 +67,7 @@ export async function typePlaceholder(input: HTMLInputElement | HTMLTextAreaElem
  * around the paragraph moves while it is being written. When it is done the markup goes back to plain text.
  */
 export async function typeReveal(el: HTMLElement, delay = 0): Promise<void> {
-  const text = el.textContent ?? "";
+  const text = tr(el.textContent ?? "");
   if (el.dataset.typed || !text.trim() || still()) return;
   el.dataset.typed = "1";
   const done = document.createElement("span");

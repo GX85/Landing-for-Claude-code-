@@ -5,6 +5,7 @@ import "@fontsource/instrument-serif/latin-400.css";
 import "./sections.css";
 import "./dark.css";
 import { themeButton } from "./theme";
+import { langButton, tr } from "./i18n";
 import { typeOnView } from "./app/typing";
 import { focusMark } from "./mark";
 import { agentMascot } from "./mascot";
@@ -223,7 +224,7 @@ function setupDemo(): void {
   // types one answer word by word, then calls done
   const type = (a: HTMLElement, text: string, done: () => void) => {
     const out = a.querySelector<HTMLElement>(".demo-text")!;
-    const words = text.split(" ");
+    const words = tr(text).split(" ");
     let i = 0;
     status(a, "writing", true);
     const step = () => {
@@ -247,7 +248,7 @@ function setupDemo(): void {
     });
     if (reducedMotion) {
       agents.forEach((a, i) => {
-        a.querySelector(".demo-text")!.textContent = DEMO_SCRIPT[i];
+        a.querySelector(".demo-text")!.textContent = tr(DEMO_SCRIPT[i]);
         status(a, "done");
       });
       return;
@@ -793,7 +794,7 @@ export function initSections(el: HTMLElement): void {
   statement = root.querySelector("[data-words]");
   words = setupStatement();
   if (reducedMotion) words.forEach((w) => w.classList.add("lit"));
-  root.querySelector("[data-theme-slot]")?.replaceWith(themeButton("nav-theme"));
+  root.querySelector("[data-theme-slot]")?.replaceWith(langButton("nav-theme"), themeButton("nav-theme"));
   makeFog();
   // the lines under each heading are written out when they scroll into view
   typeOnView([...root.querySelectorAll<HTMLElement>(".section-head > p:not(.eyebrow), .intro-lede")]);

@@ -1,3 +1,4 @@
+import { getLang } from "../i18n";
 import { detectBuild, runBuild, type BuildCall, type BuildKind } from "./builder";
 import { PROVIDERS, TIERS, type Agent, type AgentKind, type Connection, type Tier } from "./store";
 
@@ -144,7 +145,7 @@ const GREET_KEY = "focus.greetings";
  */
 export async function generateGreeting(hub: "focus" | "aeronus"): Promise<string | null> {
   if (import.meta.env.VITE_ARTIFACT === "1") return null;
-  const ru = navigator.language.toLowerCase().startsWith("ru");
+  const ru = getLang() === "ru";
   let recent: string[] = [];
   try {
     recent = JSON.parse(localStorage.getItem(GREET_KEY) ?? "[]") as string[];
@@ -310,6 +311,16 @@ const liveTier = (listed: string[]): string[] => {
   return [...present, ...fresh];
 };
 
+/** Free models that can look at pictures. */
+const visionModels = (): string[] => {
+  const own = userConnections.some((c) => c.provider === "openrouter" && c.apiKey);
+  return [
+    ...(own || serverOpenRouter !== false ? ["google/gemma-4-31b-it:free", "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"].map((m) => `openrouter/${m}`) : []),
+    "ollama/gemma4:31b",
+    "ollama/kimi-k2.6",
+  ];
+};
+
 const tierModels = (tier: Tier) => {
   const t = TIERS[tier];
   const own = userConnections.some((c) => c.provider === "openrouter" && c.apiKey);
@@ -381,8 +392,11 @@ async function callTier(spec: string, agent: Agent, conn: Connection, system: st
   if (level.name === "UltraVision") return ultraVision(tier, agent, conn, `${system}\n\n${level.note}`, messages, signal, onText);
 
   let models = tierModels(tier);
+  // a picture is attached: only models that can see go first; the text-only free hosts would ignore it
+  const sees = messages.some((m) => m.images?.length);
+  if (sees) models = visionModels();
   // a quick answer goes to the fastest of the tier's models first
-  if (level.name === "quick") models = [...models].sort((a, b) => speedOf(a) - speedOf(b));
+  if (!sees && level.name === "quick") models = [...models].sort((a, b) => speedOf(a) - speedOf(b));
   // an agent built in Focus tries the model its owner picked before anything else
   const first = preferred(agent);
   if (first) models = [first, ...models.filter((m) => m !== first)];

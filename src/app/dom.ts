@@ -1,3 +1,4 @@
+import { langButton } from "../i18n";
 import { themeButton } from "../theme";
 type Child = Node | string | null | undefined | false;
 type Attrs = Record<string, string | number | boolean | ((e: Event) => void) | undefined | null>;
@@ -82,7 +83,7 @@ export function pageHead(title: Node | string, ...actions: (Node | null | false)
       h("button", { class: "icon-btn head-new", type: "button", "data-action": "new-chat", title: "New chat", "aria-label": "New chat" }, icon("compose")),
       h("div", { class: "head-title" }, title),
     ),
-    h("div", { class: "head-actions" }, ...actions, themeButton("icon-btn")),
+    h("div", { class: "head-actions" }, ...actions, langButton("icon-btn"), themeButton("icon-btn")),
   );
 }
 

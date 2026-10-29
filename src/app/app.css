@@ -33,7 +33,20 @@
 }
 
 .app-root.app-enter {
-  animation: app-in 0.5s var(--ease);
+  /* the window the landing closed to a hairline opens again, and the chat is already inside */
+  animation: app-open 0.85s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes app-open {
+  from {
+    clip-path: inset(49.7% 0 49.7% 0 round 999px);
+  }
+  35% {
+    clip-path: inset(49.7% 0 49.7% 0 round 999px);
+  }
+  to {
+    clip-path: inset(0 0 0 0 round 0);
+  }
 }
 
 @keyframes app-in {
@@ -1388,7 +1401,7 @@ details[open] > .card-head > svg:last-child {
   font-size: 12.5px;
 }
 
-.field input,
+.field input:not([type="range"]),
 .field select,
 .field textarea {
   width: 100%;
@@ -1400,7 +1413,7 @@ details[open] > .card-head > svg:last-child {
   transition: border-color 0.15s, background-color 0.15s;
 }
 
-.field input:focus,
+.field input:not([type="range"]):focus,
 .field select:focus,
 .field textarea:focus {
   outline: none;
@@ -2087,7 +2100,7 @@ html.dark .app-root .bubble {
 }
 
 html.dark .app-root .card,
-html.dark .app-root .field input,
+html.dark .app-root .field input:not([type="range"]),
 html.dark .app-root .field select,
 html.dark .app-root .field textarea {
   color: var(--ink);

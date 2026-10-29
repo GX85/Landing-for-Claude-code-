@@ -2299,100 +2299,10 @@
   }
 }
 
-/* ---------- the colour behind the wordmark ---------- */
-/* four soft blobs of the island's sunset; they swell in while the wordmark opens, then keep drifting.
-   Only transform and opacity move, so it stays on the GPU even on a phone. */
-.aurora {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  overflow: hidden;
-  pointer-events: none;
-  opacity: 1;
-  transform: scale(1);
-  transition:
-    opacity 2.4s ease 0.25s,
-    transform 2.8s cubic-bezier(0.22, 1, 0.36, 1) 0.1s;
-}
-.landing.pre .aurora {
-  opacity: 0;
-  transform: scale(0.6);
-  transition: none;
-}
-.aurora i {
-  position: absolute;
-  left: 50%;
-  top: 46%;
-  width: 78vmax;
-  height: 78vmax;
-  margin: -39vmax 0 0 -39vmax;
-  border-radius: 50%;
-  background: radial-gradient(closest-side, var(--c), transparent 72%);
-  opacity: var(--o, 0.5);
-  will-change: transform;
-  animation: aurora-drift var(--t, 18s) ease-in-out infinite alternate;
-}
-.aurora i:nth-child(1) {
-  --c: #ff8a5c;
-  --x: -26vw;
-  --y: -12vh;
-  --x2: 18vw;
-  --y2: 10vh;
-  --t: 17s;
-}
-.aurora i:nth-child(2) {
-  --c: #ff5fb7;
-  --x: 28vw;
-  --y: -16vh;
-  --x2: -14vw;
-  --y2: 14vh;
-  --t: 21s;
-  --o: 0.42;
-}
-.aurora i:nth-child(3) {
-  --c: #3fd0ff;
-  --x: -20vw;
-  --y: 22vh;
-  --x2: 24vw;
-  --y2: -8vh;
-  --t: 24s;
-  --o: 0.4;
-}
-.aurora i:nth-child(4) {
-  --c: #8f7bff;
-  --x: 22vw;
-  --y: 20vh;
-  --x2: -22vw;
-  --y2: -14vh;
-  --t: 19s;
-  --o: 0.36;
-}
-@keyframes aurora-drift {
-  from {
-    transform: translate3d(var(--x), var(--y), 0) scale(0.85);
-  }
-  to {
-    transform: translate3d(var(--x2), var(--y2), 0) scale(1.15);
-  }
-}
-html.light .aurora i {
-  --o: 0.3;
-}
-@media (hover: none), (max-width: 720px) {
-  .aurora i {
-    width: 120vw;
-    height: 120vw;
-    margin: -60vw 0 0 -60vw;
-    opacity: calc(var(--o, 0.5) * 1.5);
-  }
-  .aurora i:nth-child(4) {
-    display: none;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .aurora i {
-    animation: none;
-  }
+/* no glow or colour wash anywhere on the landing */
+.ambient,
+.orb {
+  display: none !important;
 }
 
 /* ---------- paragraphs that are written out as they appear ---------- */
@@ -2440,4 +2350,17 @@ html.light .aurora i {
     opacity: 0;
     transform: translateY(8px);
   }
+}
+
+.lang-btn {
+  min-width: 34px;
+  height: 34px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: inherit;
+  font: 750 12px/1 inherit;
+  letter-spacing: 0.04em;
+  cursor: pointer;
 }

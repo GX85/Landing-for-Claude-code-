@@ -152,7 +152,7 @@ async function runFocus(input: RunInput): Promise<RunResult> {
   if (input.agent.model.startsWith("ollama/")) {
     const key = process.env.FOCUS_OLLAMA_KEY?.trim();
     if (!key) throw new UserError("Ollama isn't set up on this server (FOCUS_OLLAMA_KEY).", 503);
-    return streamFree(OLLAMA_URL, input.agent.model.slice("ollama/".length), input, key);
+    return streamFree(OLLAMA_URL, input.agent.model.slice("ollama/".length), input, key, true);
   }
   if (input.agent.model.startsWith("openrouter/")) {
     const orKey = process.env.FOCUS_OPENROUTER_KEY;
@@ -212,7 +212,7 @@ const FREE_SERVER_MODELS: [string, string][] = [
 ];
 
 /** One keyless, OpenAI-style streaming call. Gives up if nothing arrives within 15 s. */
-async function streamFree(url: string, freeModel: string, { system, messages, signal, onText }: RunInput, key = ""): Promise<RunResult> {
+async function streamFree(url: string, freeModel: string, { system, messages, signal, onText }: RunInput, key = "", vision = false): Promise<RunResult> {
   const quiet = new AbortController();
   const timer = setTimeout(() => quiet.abort(), 15000);
   const signals = [quiet.signal, AbortSignal.timeout(REQUEST_TIMEOUT_MS), ...(signal ? [signal] : [])];
@@ -223,7 +223,7 @@ async function streamFree(url: string, freeModel: string, { system, messages, si
       body: JSON.stringify({
         model: freeModel,
         stream: true,
-        messages: [...(system ? [{ role: "system", content: system }] : []), ...messages.map((m) => ({ role: m.role, content: m.content + imageNote(m) }))],
+        messages: [...(system ? [{ role: "system", content: system }] : []), ...messages.map((m) => (vision && m.role === "user" && m.images?.length ? { role: m.role, content: [{ type: "text", text: m.content }, ...m.images.map((i) => ({ type: "image_url", image_url: { url: `data:${i.mediaType};base64,${i.data}` } }))] } : { role: m.role, content: m.content + imageNote(m) }))],
       }),
       signal: AbortSignal.any(signals),
     });
