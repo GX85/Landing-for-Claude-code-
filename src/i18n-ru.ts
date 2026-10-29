@@ -711,6 +711,7 @@ const PAIRS: [string, string][] = [
   ["Attach files", "Прикрепить файлы"],
   ["Photos, video, PDFs and text files", "Фото, видео, PDF и текстовые файлы"],
   ["Voice input", "Голосовой ввод"],
+  ["The video generator didn't answer, so Focus made an animated film instead.", "Видеогенератор не ответил, поэтому Focus сделал анимированный фильм."],
   ["Writing the film…", "Пишу фильм…"],
   ["The free models were busy, trying again…", "Бесплатные модели заняты, пробую ещё раз…"],
   ["Voice input isn't supported in this browser. Try Chrome, Edge or Safari.", "Голосовой ввод не поддерживается в этом браузере. Попробуйте Chrome, Edge или Safari."],

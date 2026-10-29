@@ -1,4 +1,4 @@
-import { getLang } from "../i18n";
+import { getLang, tr } from "../i18n";
 import { intentHint, looksLikeTool, parseToolCall, runTool, toolNote, toolsOn, toolsPrompt, type Source } from "./tools";
 import { detectBuild, runBuild, type BuildCall, type BuildKind } from "./builder";
 import { PROVIDERS, TIERS, type Agent, type AgentKind, type Connection, type Tier } from "./store";
@@ -576,6 +576,24 @@ async function enhanceImagePrompt(agent: Agent, conn: Connection, idea: string, 
 
 /** Runs a media or agent job: starts it, then polls until it finishes. */
 export async function runJob(agent: Agent, conn: Connection, prompt: string, images: ImagePart[], signal: AbortSignal, onProgress: (status: string) => void): Promise<CallResult> {
+  if (agent.kind === "video" && conn.provider !== "focus") {
+    // a paid generator needs the Focus server; if it can't deliver, Focus still makes an animated film
+    const free = (): Promise<CallResult> => {
+      const focus = { ...conn, provider: "focus" as const };
+      return focusClip(agent, focus, prompt, signal, onProgress).then((r) => ({ ...r, text: `${r.text}\n\n*${tr("The video generator didn't answer, so Focus made an animated film instead.")}*` }));
+    };
+    if (import.meta.env.VITE_ARTIFACT === "1") return free();
+    try {
+      return await runJobOn(agent, conn, prompt, images, signal, onProgress);
+    } catch (error) {
+      if (signal.aborted) throw error;
+      return free();
+    }
+  }
+  return runJobOn(agent, conn, prompt, images, signal, onProgress);
+}
+
+async function runJobOn(agent: Agent, conn: Connection, prompt: string, images: ImagePart[], signal: AbortSignal, onProgress: (status: string) => void): Promise<CallResult> {
   if (conn.provider === "focus" && agent.kind === "video") return focusClip(agent, conn, prompt, signal, onProgress);
   if (conn.provider === "focus" && agent.kind === "image") {
     onProgress("Polishing your prompt…");
