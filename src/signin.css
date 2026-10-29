@@ -29,3 +29,6 @@
 .signin-form input:focus { outline: none; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35); }
 .signin-form input::placeholder { letter-spacing: normal; font-size: 15px; font-weight: 500; }
 .signin-card a.signin-btn { text-decoration: none; color: inherit; margin-top: 18px; }
+#signin:not([hidden]) { animation: gate-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+#signin.leaving { opacity: 0; transform: scale(0.98); transition: opacity 0.3s ease, transform 0.3s ease; }
+@keyframes gate-in { from { opacity: 0; transform: scale(0.985); } }

@@ -19,12 +19,43 @@ interface AuthInfo {
 
 let info: AuthInfo | undefined;
 
+/**
+ * An Artifact has no server to check a key, so its copy checks one in the page: only a slow, salted hash of the key
+ * is stored, never the key. It keeps casual visitors out; the real lock is the server's, on the website.
+ */
+const ARTIFACT = import.meta.env.VITE_ARTIFACT === "1";
+const ART_SALT = "focus-artifact-v1";
+const ART_HASH = "f86892297d27315bf61dd545aa335d47d973476826f803e6ce41090da85dc6ad";
+const hex = (buf: ArrayBuffer) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+
+async function artifactKeyOk(key: string): Promise<boolean> {
+  const material = await crypto.subtle.importKey("raw", new TextEncoder().encode(key.trim()), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: new TextEncoder().encode(ART_SALT), iterations: 200000 }, material, 256);
+  const ok = hex(bits) === ART_HASH;
+  if (ok) {
+    try {
+      localStorage.setItem("focus.unlock", ART_HASH);
+    } catch {
+      // private mode: the key is asked again next time
+    }
+  }
+  return ok;
+}
+
+const artifactUnlocked = () => {
+  try {
+    return localStorage.getItem("focus.unlock") === ART_HASH;
+  } catch {
+    return false;
+  }
+};
+
 /** Asks the server who is signed in. When sign-in isn't set up (or the server can't be reached), the app stays open. */
 export async function authInfo(): Promise<AuthInfo> {
   if (info) return info;
   try {
-    // an Artifact has no server of its own, so there is nothing to ask
-    if (import.meta.env.VITE_ARTIFACT === "1") throw new Error("artifact");
+    // an Artifact has no server of its own: its only gate is the key checked in the page
+    if (ARTIFACT) return (info = { enabled: false, providers: { github: false, google: false, email: false }, user: null, access: { required: true, granted: artifactUnlocked() } });
     const res = await fetch("/api/auth?a=me", { cache: "no-store" });
     info = res.ok ? ((await res.json()) as AuthInfo) : undefined;
   } catch {
@@ -120,7 +151,7 @@ export function renderGate(el: HTMLElement, onDone: () => void): void {
     e.preventDefault();
     btn.disabled = true;
     note.textContent = "";
-    const r = await post("key", { key: input.value });
+    const r = ARTIFACT ? ((await artifactKeyOk(input.value)) ? {} : { error: "That key isn't right." }) : await post("key", { key: input.value });
     btn.disabled = false;
     if (r.error) {
       note.textContent = r.error;

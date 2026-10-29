@@ -3,7 +3,7 @@
  * developer tools do nothing. A browser always has to be given the page's code to run it, so this raises the bar
  * rather than sealing it; everything that must stay secret (keys, the access key) lives on the server only.
  */
-if (import.meta.env.PROD && import.meta.env.VITE_ARTIFACT !== "1") {
+if (import.meta.env.PROD) {
   const editable = (t: EventTarget | null) => t instanceof Element && !!t.closest("input, textarea, [contenteditable], .md, pre, code");
   addEventListener("contextmenu", (e) => {
     if (!editable(e.target)) e.preventDefault();

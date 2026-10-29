@@ -48,7 +48,15 @@ async function apply(route: Route): Promise<void> {
     current = undefined;
     document.title = "Access key · Focus";
     signinRoot.hidden = false;
-    renderGate(signinRoot, () => location.assign(location.pathname));
+    renderGate(signinRoot, () => {
+      // the gate closes and the window opens onto the app, exactly like the entrance
+      signinRoot.classList.add("leaving");
+      setTimeout(() => {
+        signinRoot.hidden = true;
+        signinRoot.classList.remove("leaving");
+        void apply(parseRoute(currentPath()));
+      }, 320);
+    });
     return;
   }
   if (auth.enabled && !auth.user) {
