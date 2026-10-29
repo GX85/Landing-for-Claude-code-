@@ -617,11 +617,14 @@ let lastPaint = 0;
  * Repaints changed messages on the next frame. Long streams (a whole game being written)
  * repaint less often, so re-rendering a big Markdown answer never eats every frame.
  */
+const TOUCH = typeof matchMedia === "function" && matchMedia("(hover: none)").matches;
+
 function refresh(chat: Chat, m: Message): void {
   dirty.add(m.id);
   if (frame) return;
   const size = (m.steps ?? []).reduce((n, s) => n + s.text.length, m.content.length);
-  const wait = size > 20000 ? 320 : size > 6000 ? 150 : 0;
+  // phones repaint a streaming answer at most ~11 times a second: re-parsing Markdown on every chunk is what makes them lag
+  const wait = size > 20000 ? 320 : size > 6000 ? 160 : TOUCH ? 90 : 0;
   const delay = Math.max(0, lastPaint + wait - performance.now());
   frame = window.setTimeout(() =>
     requestAnimationFrame(() => {

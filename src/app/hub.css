@@ -1319,3 +1319,55 @@ html.dark .app-root .md code {
   white-space: normal;
   overflow-wrap: anywhere;
 }
+
+/* ======================================================================
+   Mid-range phones (Dimensity 7300 class): keep the main thread and the GPU idle.
+   Animated filters, per-frame gradients and off-screen messages are what cost frames.
+   ====================================================================== */
+@media (hover: none), (max-width: 720px) {
+  /* an SVG inside a drop-shadow filter is re-rasterised every frame it animates */
+  .focus-mark,
+  .brand .focus-mark,
+  .hello-logo .focus-mark,
+  .mascot {
+    filter: none !important;
+  }
+  /* the wave still rolls, but in a few steps and on opacity alone */
+  .focus-mark.wave .px,
+  .focus-mark.burst .px {
+    animation: px-wave-lite 1.6s steps(8, end) infinite;
+  }
+  @keyframes px-wave-lite {
+    0%,
+    55%,
+    100% {
+      opacity: var(--o, 0.6);
+    }
+    25% {
+      opacity: 1;
+    }
+  }
+  /* text painted through a moving gradient repaints the whole line each frame */
+  .think-label,
+  .think-label.swap-think {
+    background: none;
+    -webkit-background-clip: border-box;
+    background-clip: border-box;
+    color: var(--ink-3);
+    animation: title-wait 1.4s ease-in-out infinite;
+  }
+  .app-root::before {
+    background: linear-gradient(160deg, rgba(255, 178, 122, 0.14), transparent 45%, rgba(140, 207, 255, 0.12));
+  }
+  /* messages far off screen aren't laid out or painted; the newest stays live */
+  .app-root .msg:not(:last-child):not(:has(.code-preview)) {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 140px;
+  }
+  .app-root .chat-scroll {
+    overscroll-behavior: contain;
+  }
+  .app-root .code-block pre {
+    contain: content;
+  }
+}
