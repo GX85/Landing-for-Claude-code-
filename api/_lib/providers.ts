@@ -177,6 +177,7 @@ const POOL: { env: string; url: string; model: string }[] = [
   { env: "FOCUS_CEREBRAS_KEY", url: "https://api.cerebras.ai/v1/chat/completions", model: "llama-3.3-70b" },
   { env: "FOCUS_GEMINI_KEY", url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", model: "gemini-2.5-flash" },
   { env: "FOCUS_MISTRAL_KEY", url: "https://api.mistral.ai/v1/chat/completions", model: "mistral-small-latest" },
+  { env: "FOCUS_OLLAMA_KEY", url: "https://ollama.com/v1/chat/completions", model: "gpt-oss:120b" },
   { env: "FOCUS_SAMBANOVA_KEY", url: "https://api.sambanova.ai/v1/chat/completions", model: "Meta-Llama-3.3-70B-Instruct" },
 ];
 
@@ -224,9 +225,11 @@ async function streamFree(url: string, freeModel: string, { system, messages, si
         const payload = line.slice(5).trim();
         if (payload === "[DONE]") continue;
         try {
-          const data = JSON.parse(payload) as { model?: string; choices?: { delta?: { content?: string } }[] };
+          const data = JSON.parse(payload) as { model?: string; choices?: { delta?: { content?: string; reasoning?: string } }[] };
           model = data.model ?? model;
           const delta = data.choices?.[0]?.delta?.content;
+          // reasoning models think before they speak; that still counts as the host being alive
+          if (data.choices?.[0]?.delta?.reasoning) clearTimeout(timer);
           if (delta) {
             clearTimeout(timer);
             text += delta;
