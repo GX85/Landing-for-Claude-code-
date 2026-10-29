@@ -163,6 +163,7 @@ class Run {
       avatar: agent.avatar,
       provider: this.ctx.connectionOf(agent)?.provider,
       mascot: agent.id.startsWith("fa-") ? agent.color : undefined,
+      focus: agent.id.startsWith("tier-") || undefined,
       color: agent.color,
       phase,
       status: "running",

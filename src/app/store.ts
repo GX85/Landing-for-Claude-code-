@@ -259,6 +259,8 @@ export interface StepRecord {
   provider?: Provider;
   /** Set for agents built in Focus: their square's colour. */
   mascot?: string;
+  /** a Focus tier answered: show the Focus mark instead of a letter */
+  focus?: boolean;
   avatar?: string;
   id: number;
   agentId: string;

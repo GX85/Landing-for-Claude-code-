@@ -5,7 +5,7 @@ import { applyHub, focusMark } from "./brand";
 import "./app.css";
 import "./hub.css";
 import "@fontsource/playfair-display/latin-900.css";
-import type { Route } from "../router";
+import { routePath, type Route } from "../router";
 import { renderChat, isRunning } from "./chat";
 import { h, icon, relativeDay } from "./dom";
 import { renderAgents, renderConnections, renderModes } from "./pages";
@@ -250,6 +250,7 @@ function renderChats(): void {
 export function show(el: HTMLElement, route: Route, go: Go): void {
   if (root !== el) mount(el);
   ctx.go = go;
+  const previous = ctx.route;
   ctx.route = route;
   renderSidebar();
   applyHub(state.config.hub ?? "focus");
@@ -281,8 +282,32 @@ export function show(el: HTMLElement, route: Route, go: Go): void {
       renderChat(main, ctx, chat);
     }
   }
+  slideIn(previous, route);
 }
 
 export function unmount(): void {
   closeDrawer();
+}
+
+/** How deep a route is: chats are the base, section pages sit one level in, a single agent two. */
+const depth = (r: Route | undefined): number => (!r ? 0 : r.name === "builder" && r.id ? 2 : r.name === "chat" ? 0 : 1);
+let lastKey = "";
+
+/** The page slides in from the right when going deeper and from the left when going back, so swiping back feels like going back. */
+function slideIn(from: Route | undefined, to: Route): void {
+  const key = routePath(to);
+  if (key === lastKey || !from || matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    lastKey = key;
+    return;
+  }
+  lastKey = key;
+  const dir = Math.sign(depth(to) - depth(from)) || (to.name === from.name ? 0 : 1);
+  main.getAnimations().forEach((a) => a.cancel());
+  main.animate(
+    [
+      { opacity: 0, transform: `translateX(${dir * 28}px) scale(${dir === 0 ? 0.99 : 1})` },
+      { opacity: 1, transform: "none" },
+    ],
+    { duration: 320, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
+  );
 }

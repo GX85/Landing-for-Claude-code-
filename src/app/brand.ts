@@ -1,5 +1,6 @@
 import { LOGOS } from "./logos";
 import { agentMascot } from "../mascot";
+import { focusMark } from "../mark";
 export { focusMark } from "../mark";
 import type { Hub, Provider } from "./store";
 
@@ -22,11 +23,16 @@ export function logoSvg(provider: Provider | undefined, size = 14): SVGSVGElemen
 }
 
 /** The round badge for an agent: its own avatar text if it has one, else the maker's logo, else a letter. */
-export function agentAvatar(cls: string, agent: { avatar?: string; name?: string; agentName?: string; color: string; mascot?: string }, provider?: Provider): HTMLSpanElement {
+export function agentAvatar(cls: string, agent: { avatar?: string; name?: string; agentName?: string; color: string; mascot?: string; focus?: boolean }, provider?: Provider): HTMLSpanElement {
   const el = document.createElement("span");
   if (agent.mascot) {
     el.className = `avatar mascot-avatar ${cls}`.trim();
     el.append(agentMascot(agent.mascot, cls === "xs" ? 18 : cls === "sm" ? 20 : 28));
+    return el;
+  }
+  if (agent.focus) {
+    el.className = `avatar mascot-avatar ${cls}`.trim();
+    el.append(focusMark(cls === "xs" ? 18 : cls === "sm" ? 20 : 28));
     return el;
   }
   el.className = `avatar ${cls}`.trim();

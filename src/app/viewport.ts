@@ -26,4 +26,18 @@ export function trackViewport(el: HTMLElement): void {
     setTimeout(queue, 300);
   });
   sync();
+
+  // ?debug=1 prints what the browser reports, to chase keyboard problems on a real phone
+  if (/[?&]debug\b/.test(location.search)) {
+    const box = document.createElement("pre");
+    box.style.cssText = "position:fixed;left:0;top:0;z-index:9999;margin:0;padding:4px 6px;font:11px/1.3 monospace;background:#000c;color:#0f0;pointer-events:none";
+    document.body.append(box);
+    const show = () => {
+      const r = el.getBoundingClientRect();
+      box.textContent = `inner ${innerWidth}x${innerHeight}  vv ${Math.round(vv.width)}x${Math.round(vv.height)} top ${Math.round(vv.offsetTop)} scale ${vv.scale.toFixed(2)}\napp top ${Math.round(r.top)} h ${Math.round(r.height)}  scrollY ${Math.round(scrollY)}  screen ${screen.width}x${screen.height}`;
+    };
+    for (const t of ["resize", "scroll"]) vv.addEventListener(t, show);
+    setInterval(show, 500);
+    show();
+  }
 }
