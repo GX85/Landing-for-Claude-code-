@@ -1,3 +1,4 @@
+import "../signin.css";
 import { h } from "./dom";
 
 export interface AuthUser {
@@ -13,6 +14,7 @@ interface AuthInfo {
   enabled: boolean;
   providers: { github: boolean; google: boolean; email: boolean };
   user: AuthUser | null;
+  access?: { required: boolean; granted: boolean };
 }
 
 let info: AuthInfo | undefined;
@@ -106,4 +108,44 @@ export function renderSignIn(el: HTMLElement, a: AuthInfo, onDone: () => void): 
     ),
   );
   (a.providers.email ? emailInput : el.querySelector<HTMLElement>(".signin-btn"))?.focus();
+}
+
+/** The closed door: the app needs an access key. The key is checked on the server and never ships in the page. */
+export function renderGate(el: HTMLElement, onDone: () => void): void {
+  const note = h("p", { class: "signin-note", role: "status" });
+  const input = h("input", { type: "password", inputmode: "numeric", autocomplete: "off", placeholder: "Access key", "aria-label": "Access key", required: true });
+  const btn = h("button", { class: "signin-btn primary", type: "submit" }, "Enter Focus");
+  const form = h("form", { class: "signin-form" }, input, btn);
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    btn.disabled = true;
+    note.textContent = "";
+    const r = await post("key", { key: input.value });
+    btn.disabled = false;
+    if (r.error) {
+      note.textContent = r.error;
+      input.value = "";
+      input.focus();
+      return;
+    }
+    info = undefined;
+    onDone();
+  });
+  el.replaceChildren(
+    h(
+      "div",
+      { class: "signin" },
+      h(
+        "div",
+        { class: "signin-card" },
+        h("a", { class: "signin-logo", href: "/" }, "Focus"),
+        h("h1", {}, "Access key"),
+        h("p", { class: "signin-lede" }, "Focus opens with a key. Write to ", h("a", { href: "mailto:ItsTeamSwift@proton.me?subject=Focus%20access" }, "ItsTeamSwift@proton.me"), " to get the right to use the best free AI model."),
+        form,
+        note,
+        h("a", { class: "signin-btn", href: "/" }, "← Back to the landing"),
+      ),
+    ),
+  );
+  input.focus();
 }

@@ -624,6 +624,14 @@ const PAIRS: [string, string][] = [
   ["Interface language", "Язык интерфейса"],
   ["English", "English"],
   ["Русский", "Русский"],
+  // ---- access key
+  ["Access key", "Ключ доступа"],
+  ["Access key · Focus", "Ключ доступа · Focus"],
+  ["Enter Focus", "Войти в Focus"],
+  ["Focus opens with a key. Write to", "Focus открывается по ключу. Напишите на"],
+  ["to get the right to use the best free AI model.", "чтобы получить право пользоваться лучшей бесплатной ИИ-моделью."],
+  ["That key isn't right.", "Этот ключ не подходит."],
+  ["← Back to the landing", "← На лендинг"],
   // ---- sign in
   ["Email me a code", "Отправить код на почту"],
   ["Use a different email", "Другая почта"],

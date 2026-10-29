@@ -1,3 +1,4 @@
+import "./guard";
 import { initI18n } from "./i18n";
 import { hideLanding, showLanding } from "./landing";
 import { parseRoute, routePath, type Route } from "./router";
@@ -34,12 +35,21 @@ async function apply(route: Route): Promise<void> {
     return;
   }
 
-  const { authInfo, renderSignIn } = await import("./app/signin");
+  const { authInfo, renderSignIn, renderGate } = await import("./app/signin");
   const auth = await authInfo();
   {
     const api = await import("./app/api");
     api.setServerPool(auth.pool ?? 0);
     api.warmModels();
+  }
+  if (auth.access?.required && !auth.access.granted) {
+    hideLanding();
+    appRoot.hidden = true;
+    current = undefined;
+    document.title = "Access key · Focus";
+    signinRoot.hidden = false;
+    renderGate(signinRoot, () => location.assign(location.pathname));
+    return;
   }
   if (auth.enabled && !auth.user) {
     hideLanding();

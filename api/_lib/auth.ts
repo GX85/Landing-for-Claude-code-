@@ -18,6 +18,7 @@ export interface User {
 const SESSION = "focus_session";
 const STATE = "focus_oauth";
 const CODE = "focus_code";
+const ACCESS = "focus_access";
 const SESSION_DAYS = 30;
 const CODE_MINUTES = 10;
 const CODE_TRIES = 5;
@@ -78,8 +79,20 @@ export function currentUser(request: Request): User | undefined {
   return verify<User & { exp: number }>(cookies(request)[SESSION]);
 }
 
-/** Throws a 401 response when sign-in is on and the request has no session. */
+/** The access key that opens the app (FOCUS_ACCESS_CODE). Without it the app is closed to everyone but the landing. */
+const accessCode = () => env("FOCUS_ACCESS_CODE");
+export const accessRequired = () => !!accessCode() && !!secret();
+export const hasAccess = (request: Request) => !accessRequired() || !!verify<{ ok: boolean; exp: number }>(cookies(request)[ACCESS]);
+
+const sameKey = (given: string) => {
+  const a = createHash("sha256").update(given.trim()).digest();
+  const b = createHash("sha256").update(accessCode()).digest();
+  return timingSafeEqual(a, b);
+};
+
+/** Throws a 401 response when the access key hasn't been entered, or when sign-in is on and the request has no session. */
 export function requireUser(request: Request): Response | undefined {
+  if (!hasAccess(request)) return new Response(JSON.stringify({ error: "Access key required." }), { status: 401, headers: { "content-type": "application/json" } });
   if (!authEnabled() || currentUser(request)) return;
   return new Response(JSON.stringify({ error: "Sign in to use Focus." }), { status: 401, headers: { "content-type": "application/json" } });
 }
@@ -211,8 +224,19 @@ function checkCode(request: Request, code: string): Response {
 export async function handleAuth(request: Request): Promise<Response> {
   const a = new URL(request.url).searchParams.get("a") ?? "me";
   const on = providers();
-  if (a === "me") return json({ enabled: authEnabled(), providers: on, user: currentUser(request) ?? null, pool: freePool().length });
-  if (a === "logout") return json({ ok: true }, 200, cookie(request, SESSION, "", 0));
+  if (a === "me") return json({ enabled: authEnabled(), providers: on, user: currentUser(request) ?? null, pool: hasAccess(request) ? freePool().length : 0, access: { required: accessRequired(), granted: hasAccess(request) } });
+  if (a === "key") {
+    if (request.method !== "POST") return json({ error: "Use POST." }, 405);
+    if (!accessRequired()) return json({ ok: true });
+    const body = (await request.json().catch(() => ({}))) as { key?: string };
+    if (!sameKey(String(body.key ?? ""))) {
+      // a short pause makes guessing slow
+      await new Promise((r) => setTimeout(r, 900));
+      return json({ error: "That key isn't right." }, 401);
+    }
+    return json({ ok: true }, 200, cookie(request, ACCESS, sign({ ok: true, exp: Date.now() + SESSION_DAYS * 864e5 }), SESSION_DAYS * 86400));
+  }
+  if (a === "logout") return json({ ok: true }, 200, cookie(request, SESSION, "", 0), cookie(request, ACCESS, "", 0));
   if ((a === "github" || a === "github-callback") && !on.github) return json({ error: "GitHub sign-in isn't set up." }, 404);
   if ((a === "google" || a === "google-callback") && !on.google) return json({ error: "Google sign-in isn't set up." }, 404);
   if (a === "github" || a === "google") return oauthStart(request, a);
