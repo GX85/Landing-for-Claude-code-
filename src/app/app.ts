@@ -1,6 +1,8 @@
 import { trackViewport } from "./viewport";
 import { signedInUser, signOut } from "./signin";
 import { renderMyAgents } from "./myagents";
+import { renderSettings } from "./settings";
+import { typeReveal } from "./typing";
 import { applyHub, focusMark } from "./brand";
 import "./app.css";
 import "./hub.css";
@@ -143,6 +145,7 @@ function renderSidebar(): void {
       navLink("Team", "council", { name: "agents" }, r.name === "agents"),
       navLink("Connections", "key", { name: "connections" }, r.name === "connections"),
       navLink("Modes", "modes", { name: "modes" }, r.name === "modes"),
+      navLink("Settings", "settings", { name: "settings" }, r.name === "settings"),
     ),
     chatsEl,
     footEl,
@@ -272,6 +275,10 @@ export function show(el: HTMLElement, route: Route, go: Go): void {
       document.title = "Modes · Focus";
       renderModes(main, ctx);
       break;
+    case "settings":
+      document.title = "Settings · Focus";
+      renderSettings(main, ctx);
+      break;
     default: {
       const chat = route.name === "chat" && route.id ? state.chats.find((c) => c.id === route.id) : undefined;
       if (route.name === "chat" && route.id && !chat) {
@@ -283,6 +290,7 @@ export function show(el: HTMLElement, route: Route, go: Go): void {
     }
   }
   slideIn(previous, route);
+  for (const lede of main.querySelectorAll<HTMLElement>(".page-lede")) void typeReveal(lede, 250);
 }
 
 export function unmount(): void {

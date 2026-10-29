@@ -9,7 +9,7 @@ import { click, setSound } from "./sound";
 import { agentAvatar, applyHub, focusMark } from "./brand";
 import { agentMascot } from "../mascot";
 import { typeInto as handWrite, typePlaceholder } from "./typing";
-import { allSkills, connectionOf, isReady, KIND_LABEL, missing, newConnection, PERSONA, PROVIDERS, TIER_ORDER, TIERS, uid, type Agent, type Attachment, type Chat, type ChatConfig, type FocusAgent, type Hub, type Message, type StepRecord, type Tier } from "./store";
+import { allSkills, choiceModel, connectionOf, isReady, KIND_LABEL, missing, newConnection, PERSONA, PROVIDERS, TIER_ORDER, TIERS, uid, type Agent, type Attachment, type Chat, type ChatConfig, type FocusAgent, type Hub, type Message, type StepRecord, type Tier } from "./store";
 
 const SCENE_VIDEO = "https://d2ol7oe51mr4n9.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/175fbbcd-e50a-480c-bab2-ca16d4678322.mp4";
 const SCENE_POSTER = "https://d2ol7oe51mr4n9.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/726b168c-da47-4682-a255-cc3e02f89bae.jpg";
@@ -302,7 +302,7 @@ function tierAgent(ctx: Ctx, tier: Tier, think = 0): Agent {
     ctx.persist();
   }
   const t = TIERS[tier];
-  return { id: `tier-${tier}`, name: t.name, connectionId: conn.id, kind: "chat", model: `tier:${tier}:${think}`, effort: "", role: `${PERSONA}\n\n${t.role}`, color: TIER_COLORS[tier], enabled: true, skills: [], avatar: "" };
+  return { id: `tier-${tier}`, name: t.name, connectionId: conn.id, kind: "chat", model: `tier:${tier}:${think}`, effort: "", role: `${PERSONA}\n\n${t.role}`, color: TIER_COLORS[tier], enabled: true, skills: [], avatar: "", prefer: choiceModel(ctx.state.settings.focus) };
 }
 
 /* ---------- thinking ---------- */
@@ -696,8 +696,12 @@ async function runTurn(ctx: Ctx, chat: Chat, userMsg: Message): Promise<void> {
   const focusHub = chat.config.hub === "focus";
   const built = focusHub ? focusAgentOf(ctx, chat.config) : undefined;
   const tier = built ? builtAgent(ctx, built) : focusHub ? tierAgent(ctx, chat.config.tier, chat.config.think ?? 0) : undefined;
-  const team = tier ? [tier] : teamOf(ctx, chat.config);
-  const lead = tier ?? leadOf(ctx, chat.config, team);
+  // Aeronus: the model chosen in Settings answers for every member that runs on Focus's own connection
+  const hubModel = tier ? undefined : choiceModel(ctx.state.settings.aeronus);
+  const withHubModel = (a: Agent): Agent => (hubModel && a.kind === "chat" && connectionOf(ctx.state, a)?.provider === "focus" ? { ...a, model: hubModel } : a);
+  const team = tier ? [tier] : teamOf(ctx, chat.config).map(withHubModel);
+  const lead0 = tier ? undefined : leadOf(ctx, chat.config, teamOf(ctx, chat.config));
+  const lead = tier ?? (lead0 ? withHubModel(lead0) : undefined);
   const mode = focusHub ? "solo" : chat.config.mode;
   const agents = mode === "solo" && lead ? [lead] : team;
   const m: Message = { id: uid(), role: "assistant", content: "", mode, status: "running", steps: [], createdAt: Date.now() };
@@ -1011,7 +1015,7 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onH
       config.think = i;
       range.value = String(i);
       range.style.setProperty("--p", `${(i / (THINK.length - 1)) * 100}%`);
-      hint.textContent = THINK[i].hint;
+      void handWrite(hint, THINK[i].hint);
       for (const b of marks.querySelectorAll<HTMLElement>("button")) b.classList.toggle("on", b.dataset.i === String(i));
       if (thinkChip.dataset.level === String(i)) return;
       ctx.state.config = structuredClone(config);

@@ -279,6 +279,9 @@ async function chainCall(
   throw new Error(`No free model answered right now${why ? ` (${why.replace(/\.$/, "")})` : ""}. Wait a minute and try again, or add your own key in Connections.`);
 }
 
+/** The model an agent asked for first, as "openrouter/…" or "ollama/…"; a bare id means OpenRouter. */
+const preferred = (agent: Agent): string | undefined => (agent.prefer ? (/^(openrouter|ollama)\//.test(agent.prefer) ? agent.prefer : `openrouter/${agent.prefer}`) : undefined);
+
 const tierModels = (tier: Tier) => {
   const t = TIERS[tier];
   const own = userConnections.some((c) => c.provider === "openrouter" && c.apiKey);
@@ -335,7 +338,7 @@ async function callTier(spec: string, agent: Agent, conn: Connection, system: st
 
   if (kind) {
     let sticky: string | undefined;
-    const models = [...new Set([...(agent.prefer ? [`openrouter/${agent.prefer}`] : []), ...tierModels("clorus"), ...tierModels(tier)])];
+    const models = [...new Set([...(preferred(agent) ? [preferred(agent)!] : []), ...tierModels("clorus"), ...tierModels(tier)])];
     const call: BuildCall = async (sys, msgs, cb, maxTokens) => {
       const order = sticky ? [sticky, ...models.filter((m) => m !== sticky)] : models;
       // the Focus personality sets the tone; the builder's rules come last so they win
@@ -353,7 +356,8 @@ async function callTier(spec: string, agent: Agent, conn: Connection, system: st
   // a quick answer goes to the fastest of the tier's models first
   if (level.name === "quick") models = [...models].sort((a, b) => speedOf(a) - speedOf(b));
   // an agent built in Focus tries the model its owner picked before anything else
-  if (agent.prefer) models = [`openrouter/${agent.prefer}`, ...models.filter((m) => m !== `openrouter/${agent.prefer}`)];
+  const first = preferred(agent);
+  if (first) models = [first, ...models.filter((m) => m !== first)];
   const r = await chainCall(models, { ...agent, effort: level.effort }, conn, `${system}\n\n${level.note}`, messages, signal, onText, {
     maxTokens: level.maxTokens,
     firstTokenMs: level.firstTokenMs,
@@ -366,7 +370,7 @@ async function callTier(spec: string, agent: Agent, conn: Connection, system: st
  * editor and rewrites it. Twice the time, noticeably fewer mistakes.
  */
 async function ultraVision(tier: Tier, agent: Agent, conn: Connection, system: string, messages: ChatTurn[], signal: AbortSignal, onText: (full: string) => void): Promise<CallResult> {
-  const models = [...new Set([...(agent.prefer ? [`openrouter/${agent.prefer}`] : []), ...tierModels("clorus"), ...tierModels(tier)])];
+  const models = [...new Set([...(preferred(agent) ? [preferred(agent)!] : []), ...tierModels("clorus"), ...tierModels(tier)])];
   const opts = { maxTokens: 12000, firstTokenMs: 60000, totalMs: 240000 };
   const deep = { ...agent, effort: "high" as const };
   const ru = /[а-яё]/i.test(messages.at(-1)?.content ?? "");

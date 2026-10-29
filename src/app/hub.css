@@ -1410,3 +1410,60 @@ html.dark .app-root .md code {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+/* ---------- settings ---------- */
+.set-card {
+  margin-bottom: 16px;
+  padding: 18px;
+}
+.set-title {
+  margin: 0 0 2px;
+  font-size: 17px;
+}
+.set-lede {
+  margin: 0 0 12px;
+  font-size: 14px;
+}
+.set-seg {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.set-hint {
+  margin: 10px 0 0;
+}
+.set-body {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+.set-body input[type="search"] {
+  width: 100%;
+}
+.set-current {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+
+/* typed paragraphs: the words still to come are there but invisible, so the layout never jumps */
+.tw-g {
+  opacity: 0;
+}
+.tw-wait {
+  opacity: 0;
+}
+.tw-typing .tw-t::after {
+  content: "";
+  display: inline-block;
+  width: 1.5px;
+  height: 0.95em;
+  margin-left: 2px;
+  background: currentColor;
+  vertical-align: -0.12em;
+  animation: blink 0.9s steps(2) infinite;
+}
+
+.think-hint {
+  min-height: 5.6em;
+}

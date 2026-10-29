@@ -57,3 +57,49 @@ export async function typePlaceholder(input: HTMLInputElement | HTMLTextAreaElem
     if (!live()) return;
   }
 }
+
+/**
+ * Types a paragraph out where it stands. The words not yet typed stay in the page, invisible, so nothing
+ * around the paragraph moves while it is being written. When it is done the markup goes back to plain text.
+ */
+export async function typeReveal(el: HTMLElement, delay = 0): Promise<void> {
+  const text = el.textContent ?? "";
+  if (el.dataset.typed || !text.trim() || still()) return;
+  el.dataset.typed = "1";
+  const done = document.createElement("span");
+  const rest = document.createElement("span");
+  done.className = "tw-t";
+  rest.className = "tw-g";
+  rest.textContent = text;
+  el.replaceChildren(done, rest);
+  if (delay) await wait(delay);
+  const step = Math.min(22, Math.max(6, 1800 / text.length));
+  el.classList.add("tw-typing");
+  for (let i = 1; i <= text.length; i++) {
+    if (!el.isConnected) return;
+    done.textContent = text.slice(0, i);
+    rest.textContent = text.slice(i);
+    await wait(/[.,—·:]/.test(text[i - 1]) ? step * 5 : step);
+  }
+  el.classList.remove("tw-typing");
+  el.textContent = text;
+}
+
+/** Hides each paragraph's words now and types them out the first time they scroll into view. */
+export function typeOnView(els: HTMLElement[], delay = 0): void {
+  if (still() || typeof IntersectionObserver === "undefined") return;
+  const pending = els.filter((el) => !el.dataset.typed && el.textContent?.trim());
+  for (const el of pending) el.classList.add("tw-wait");
+  const io = new IntersectionObserver(
+    (entries) => {
+      for (const e of entries) {
+        if (!e.isIntersecting) continue;
+        io.unobserve(e.target);
+        (e.target as HTMLElement).classList.remove("tw-wait");
+        void typeReveal(e.target as HTMLElement, delay);
+      }
+    },
+    { threshold: 0.6 },
+  );
+  pending.forEach((el) => io.observe(el));
+}

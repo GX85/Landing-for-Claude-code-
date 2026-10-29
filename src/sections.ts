@@ -5,6 +5,7 @@ import "@fontsource/instrument-serif/latin-400.css";
 import "./sections.css";
 import "./dark.css";
 import { themeButton } from "./theme";
+import { typeOnView } from "./app/typing";
 import { focusMark } from "./mark";
 import { agentMascot } from "./mascot";
 import "@fontsource/playfair-display/latin-900.css";
@@ -794,6 +795,9 @@ export function initSections(el: HTMLElement): void {
   if (reducedMotion) words.forEach((w) => w.classList.add("lit"));
   root.querySelector("[data-theme-slot]")?.replaceWith(themeButton("nav-theme"));
   makeFog();
+  // the lines under each heading are written out when they scroll into view
+  typeOnView([...root.querySelectorAll<HTMLElement>(".section-head > p:not(.eyebrow), .intro-lede")]);
+  typeOnView([...root.querySelectorAll<HTMLElement>(".hero .lede")], 1300);
   setupDemo();
   setupBuildDemo();
   root.querySelectorAll("[data-mark]").forEach((el) => el.replaceWith(focusMark(26)));

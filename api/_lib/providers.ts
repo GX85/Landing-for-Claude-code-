@@ -147,6 +147,11 @@ const imageNote = (m: ChatMessage) => (m.images?.length ? `\n\n[${m.images.lengt
  * that instead, which allows more models and higher limits.
  */
 async function runFocus(input: RunInput): Promise<RunResult> {
+  if (input.agent.model.startsWith("ollama/")) {
+    const key = process.env.FOCUS_OLLAMA_KEY?.trim();
+    if (!key) throw new UserError("Ollama isn't set up on this server (FOCUS_OLLAMA_KEY).", 503);
+    return streamFree(OLLAMA_URL, input.agent.model.slice("ollama/".length), input, key);
+  }
   if (input.agent.model.startsWith("openrouter/")) {
     const orKey = process.env.FOCUS_OPENROUTER_KEY;
     if (!input.agent.model.endsWith(":free")) throw new UserError("Only free OpenRouter models run on Focus's key. Add your own OpenRouter key in Connections for the others.", 403);
@@ -169,6 +174,18 @@ async function runFocus(input: RunInput): Promise<RunResult> {
     }
   }
   throw last instanceof UserError ? last : new UserError("The free models are unavailable right now. Try again shortly, or add your own key in Connections.", 502);
+}
+
+export const OLLAMA_URL = "https://ollama.com/v1/chat/completions";
+
+/** The chat models Ollama Cloud offers with the server key. */
+export async function ollamaModels(): Promise<string[]> {
+  const key = process.env.FOCUS_OLLAMA_KEY?.trim();
+  if (!key) throw new UserError("Ollama isn't set up on this server (FOCUS_OLLAMA_KEY).", 503);
+  const res = await fetch("https://ollama.com/v1/models", { headers: { authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(10000) });
+  if (!res.ok) throw new UserError(`Ollama didn't answer (${res.status}).`, 502);
+  const data = (await res.json()) as { data?: { id: string }[] };
+  return (data.data ?? []).map((m) => m.id).sort();
 }
 
 /** Free-tier providers Focus can use when the owner sets their keys. Each key = more free messages a day. */

@@ -331,8 +331,22 @@ export interface State {
   sound: boolean;
   /** Agents the user built in Focus. */
   focusAgents: FocusAgent[];
+  /** Which model answers in each hub; "auto" leaves it to Focus. */
+  settings: { focus: ModelChoice; aeronus: ModelChoice };
   version?: number;
 }
+
+export type ModelSource = "auto" | "openrouter" | "ollama";
+export interface ModelChoice {
+  source: ModelSource;
+  /** The model's id on that service, without the service prefix. */
+  model: string;
+}
+
+export const defaultSettings = (): State["settings"] => ({ focus: { source: "auto", model: "" }, aeronus: { source: "auto", model: "" } });
+
+/** The model string the chat runner understands for a choice, or undefined to let Focus decide. */
+export const choiceModel = (c: ModelChoice | undefined): string | undefined => (c && c.source !== "auto" && c.model ? `${c.source}/${c.model}` : undefined);
 
 export interface ProviderInfo {
   label: string;
@@ -842,6 +856,7 @@ function defaults(): State {
     skills: [],
     sound: true,
     focusAgents: [],
+    settings: defaultSettings(),
     version: STATE_VERSION,
   };
 }
@@ -883,6 +898,7 @@ function upgrade(state: State): State {
   }
   // v6: agents built in Focus
   state.focusAgents ??= [];
+  state.settings ??= defaultSettings();
   state.version = STATE_VERSION;
   return state;
 }
