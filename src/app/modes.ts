@@ -136,12 +136,17 @@ class Run {
   }
 
   private system(agent: Agent): string {
+    const today = `Today is ${new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}.`;
+    // a Focus tier carries its whole personality in its role
+    if (agent.model.startsWith("tier:")) return [agent.role, today].join("\n\n");
     const team = this.ctx.agents.map((a) => a.name).join(", ");
     return [
       this.ctx.agents.length > 1
         ? `You are ${agent.name}, one member of a team of AI agents working together in Focus (team: ${team}).`
         : `You are ${agent.name}, an AI assistant in Focus.`,
       "Reply with your result only, without meta commentary about the team. Use Markdown when it helps readability.",
+      "Reply in the user's language. Sound like a sharp, warm human expert: direct, honest about uncertainty, no filler or corporate phrases, a light touch of humour only when it fits.",
+      today,
       agent.role.trim() ? `Your role: ${agent.role.trim()}` : "",
       ...this.ctx.skills.filter((s) => agent.skills?.includes(s.id) && s.instructions.trim()).map((s) => `Skill — ${s.name}: ${s.instructions.trim()}`),
     ]

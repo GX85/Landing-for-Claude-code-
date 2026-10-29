@@ -44,6 +44,10 @@ export function renderMarkdown(el: HTMLElement, source: string): void {
     const wrap = document.createElement("div");
     wrap.className = "code-block";
     head.append(label);
+    const marked = /^\s*<!--\s*focus:preview[^>]*-->\s*/i;
+    const built = marked.test(code?.textContent ?? "");
+    // the Builder's marker only says "open me"; nobody needs to read it
+    if (built && code) code.textContent = code.textContent!.replace(marked, "");
     const source = code?.textContent ?? "";
     // a whole HTML page (a game, a site, a slide deck) can be run right here, in a sandbox with no access to Focus
     if (lang === "html" && /<(html|body|script|canvas|div)\b/i.test(source)) {
@@ -86,7 +90,24 @@ export function renderMarkdown(el: HTMLElement, source: string): void {
       full.className = "code-preview-btn";
       full.textContent = "Full screen";
       full.addEventListener("click", () => open(true));
-      head.append(run, full);
+      const save = document.createElement("button");
+      save.type = "button";
+      save.className = "code-preview-btn";
+      save.textContent = "⬇ .html";
+      save.title = "Download as an HTML file";
+      save.addEventListener("click", () => {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(new Blob([source], { type: "text/html" }));
+        a.download = `${(/<title>([^<]{1,60})<\/title>/i.exec(source)?.[1] ?? "focus").replace(/[^\p{L}\p{N} _-]+/gu, "").trim() || "focus"}.html`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      });
+      head.append(run, full, save);
+      // things the Builder made open straight away, with the code folded underneath
+      if (built) {
+        open(false);
+        wrap.classList.add("built");
+      }
     }
     head.append(copy);
     pre.replaceWith(wrap);

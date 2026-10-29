@@ -5,6 +5,8 @@ import "@fontsource/instrument-serif/latin-400.css";
 import "./sections.css";
 import "./dark.css";
 import { themeButton } from "./theme";
+import { focusMark } from "./mark";
+import "@fontsource/playfair-display/latin-900.css";
 
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -268,6 +270,138 @@ function setupDemo(): void {
   }, { threshold: 0.35 }).observe(win);
 }
 
+/* ---------- build demo: Clorus makes a snake game, which then plays itself ---------- */
+
+function setupBuildDemo(): void {
+  const win = root.querySelector<HTMLElement>("[data-build-demo]");
+  if (!win) return;
+  const steps = [...win.querySelectorAll<HTMLElement>(".bd-steps li")];
+  const preview = win.querySelector<HTMLElement>(".bd-preview")!;
+  const canvas = win.querySelector<HTMLCanvasElement>(".bd-canvas")!;
+  const scoreEl = win.querySelector<HTMLElement>(".bd-score b")!;
+  const g = canvas.getContext("2d")!;
+  const W = 32;
+  const H = 18;
+  const C = canvas.width / W;
+  let timers: number[] = [];
+  let raf = 0;
+  let visible = false;
+
+  type P = { x: number; y: number };
+  let snake: P[] = [];
+  let dir: P = { x: 1, y: 0 };
+  let food: P = { x: 0, y: 0 };
+  let score = 0;
+  let acc = 0;
+  let last = 0;
+
+  const placeFood = () => {
+    do food = { x: Math.floor(Math.random() * W), y: Math.floor(Math.random() * H) };
+    while (snake.some((p) => p.x === food.x && p.y === food.y));
+  };
+  const reset = () => {
+    snake = [{ x: 6, y: 9 }, { x: 5, y: 9 }, { x: 4, y: 9 }];
+    dir = { x: 1, y: 0 };
+    score = 0;
+    scoreEl.textContent = "0";
+    placeFood();
+  };
+  // a greedy little pilot: head for the food without hitting a wall or itself
+  const step = () => {
+    const head = snake[0];
+    const options = [dir, { x: dir.y, y: -dir.x }, { x: -dir.y, y: dir.x }]
+      .map((d) => ({ d, p: { x: head.x + d.x, y: head.y + d.y } }))
+      .filter(({ p }) => p.x >= 0 && p.y >= 0 && p.x < W && p.y < H && !snake.slice(0, -1).some((b) => b.x === p.x && b.y === p.y))
+      .sort((a, b) => Math.abs(a.p.x - food.x) + Math.abs(a.p.y - food.y) - (Math.abs(b.p.x - food.x) + Math.abs(b.p.y - food.y)));
+    if (!options.length) return reset();
+    dir = options[0].d;
+    const next = options[0].p;
+    snake.unshift(next);
+    if (next.x === food.x && next.y === food.y) {
+      score += 10;
+      scoreEl.textContent = String(score);
+      placeFood();
+      if (snake.length > 60) reset();
+    } else snake.pop();
+  };
+  const draw = (t: number) => {
+    g.fillStyle = "#07070c";
+    g.fillRect(0, 0, canvas.width, canvas.height);
+    g.strokeStyle = "rgba(120,140,255,.07)";
+    g.lineWidth = 1;
+    for (let x = 0; x <= W; x++) (g.beginPath(), g.moveTo(x * C + 0.5, 0), g.lineTo(x * C + 0.5, canvas.height), g.stroke());
+    for (let y = 0; y <= H; y++) (g.beginPath(), g.moveTo(0, y * C + 0.5), g.lineTo(canvas.width, y * C + 0.5), g.stroke());
+    const pulse = 0.6 + Math.sin(t / 180) * 0.25;
+    g.shadowBlur = 18;
+    g.shadowColor = "#ff3d9a";
+    g.fillStyle = `rgba(255,61,154,${pulse + 0.15})`;
+    g.beginPath();
+    g.arc(food.x * C + C / 2, food.y * C + C / 2, C * 0.34, 0, Math.PI * 2);
+    g.fill();
+    g.shadowColor = "#39ff88";
+    snake.forEach((p, i) => {
+      const k = i / snake.length;
+      g.fillStyle = `hsl(${150 + k * 40} 100% ${60 - k * 18}%)`;
+      g.beginPath();
+      g.roundRect(p.x * C + 2, p.y * C + 2, C - 4, C - 4, 5);
+      g.fill();
+    });
+    g.shadowBlur = 0;
+  };
+  const loop = (t: number) => {
+    acc += Math.min(100, t - (last || t));
+    last = t;
+    while (acc > 95) {
+      step();
+      acc -= 95;
+    }
+    draw(t);
+    raf = requestAnimationFrame(loop);
+  };
+
+  const stop = () => {
+    timers.forEach(clearTimeout);
+    timers = [];
+    cancelAnimationFrame(raf);
+    raf = 0;
+  };
+  const play = () => {
+    stop();
+    reset();
+    preview.classList.remove("show");
+    steps.forEach((s) => s.classList.remove("on", "done"));
+    if (reducedMotion) {
+      steps.forEach((s) => s.classList.add("on", "done"));
+      preview.classList.add("show");
+      draw(0);
+      return;
+    }
+    const at = (ms: number, fn: () => void) => timers.push(window.setTimeout(fn, ms));
+    const marks = [300, 1500, 3400, 4700];
+    steps.forEach((s, i) => {
+      at(marks[i], () => s.classList.add("on"));
+      at((marks[i + 1] ?? marks[i] + 200) - 120, () => s.classList.add("done"));
+    });
+    at(5100, () => {
+      preview.classList.add("show");
+      last = 0;
+      raf = requestAnimationFrame(loop);
+    });
+    at(26000, play);
+  };
+
+  win.querySelector("[data-build-replay]")?.addEventListener("click", play);
+  new IntersectionObserver(
+    (entries) => {
+      const now = entries[0].isIntersecting && active;
+      if (now && !visible) play();
+      else if (!now && visible) stop();
+      visible = now;
+    },
+    { threshold: 0.3 },
+  ).observe(win);
+}
+
 /* ---------- fog texture ---------- */
 
 /** Paints soft clouds once into a small canvas; the fog layers just scale and slide it. */
@@ -299,11 +433,10 @@ function makeFog(): void {
 /**
  * Tap anywhere on the background and the scene leans toward the tap: the cell
  * floor, the fog and the colour orbs each move by their own depth and then
- * spring back, while a ring of light runs out across the cells.
+ * spring back.
  */
 function setupParallax(): void {
   if (reducedMotion) return;
-  const paper = root.querySelector<HTMLElement>(".paper")!;
   const layers: [HTMLElement, number][] = [
     ...[...root.querySelectorAll<HTMLElement>(".cells, .cells-lit")].map((el) => [el, 0.035] as [HTMLElement, number]),
     ...[...root.querySelectorAll<HTMLElement>(".fog i")].map((el, i) => [el, 0.07 + i * 0.05] as [HTMLElement, number]),
@@ -325,19 +458,6 @@ function setupParallax(): void {
       const at = (k: number) => (p === "translate" ? { translate: `${x * k}px ${y * k}px` } : { transform: `translate3d(${x * k}px, ${y * k}px, 0)` });
       el.animate([at(0), at(1), at(-0.28), at(0.1), at(0)], { duration: 1400, easing: "cubic-bezier(0.22, 1, 0.36, 1)", composite: "add" });
     }
-    // a ring of light that runs out across the cells
-    const ring = document.createElement("i");
-    ring.className = "tap-ring";
-    ring.style.left = `${e.clientX}px`;
-    ring.style.top = `${e.clientY}px`;
-    paper.append(ring);
-    ring.animate(
-      [
-        { transform: "translate(-50%, -50%) scale(0.05)", opacity: 0.9 },
-        { transform: "translate(-50%, -50%) scale(1)", opacity: 0 },
-      ],
-      { duration: 1100, easing: "cubic-bezier(0.2, 0.7, 0.2, 1)" },
-    ).onfinish = () => ring.remove();
   });
 }
 
@@ -707,6 +827,8 @@ export function initSections(el: HTMLElement): void {
   root.querySelector("[data-theme-slot]")?.replaceWith(themeButton("nav-theme"));
   makeFog();
   setupDemo();
+  setupBuildDemo();
+  root.querySelectorAll("[data-mark]").forEach((el) => el.replaceWith(focusMark(26)));
   root.querySelectorAll<HTMLElement>(".skill-chips b").forEach((b, i) => b.style.setProperty("--i", String(i)));
   const clawd = root.querySelector<HTMLElement>(".clawd");
   clawd?.addEventListener("click", () => {

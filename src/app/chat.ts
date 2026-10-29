@@ -3,11 +3,11 @@ import type { ChatTurn } from "./api";
 import { h, icon, pageHead, seconds } from "./dom";
 import { renderMarkdown } from "./markdown";
 import { ACCEPT, dataUrlOf, readAttachment } from "./attachments";
-import { resolveMedia, setConnections, type ImagePart } from "./api";
+import { generateGreeting, resolveMedia, setConnections, type ImagePart } from "./api";
 import { modeInfo, MODES, startRun } from "./modes";
 import { click, setSound } from "./sound";
 import { agentAvatar, applyHub, focusMark } from "./brand";
-import { allSkills, connectionOf, isReady, KIND_LABEL, missing, newConnection, PROVIDERS, TIER_ORDER, TIERS, uid, type Agent, type Attachment, type Chat, type ChatConfig, type Hub, type Message, type StepRecord, type Tier } from "./store";
+import { allSkills, connectionOf, isReady, KIND_LABEL, missing, newConnection, PERSONA, PROVIDERS, TIER_ORDER, TIERS, uid, type Agent, type Attachment, type Chat, type ChatConfig, type Hub, type Message, type StepRecord, type Tier } from "./store";
 
 const SCENE_VIDEO = "https://d2ol7oe51mr4n9.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/175fbbcd-e50a-480c-bab2-ca16d4678322.mp4";
 const SCENE_POSTER = "https://d2ol7oe51mr4n9.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/726b168c-da47-4682-a255-cc3e02f89bae.jpg";
@@ -97,8 +97,19 @@ export function renderChat(main: HTMLElement, ctx: Ctx, chat: Chat | undefined):
   if (!chat || !chat.messages.length) {
     const title = h("h1", { class: "hello-title" });
     const sugg = h("div", { class: "suggestions" });
+    let greeting = 0;
     const paint = (animate: boolean) => {
-      title.textContent = hubOf(config) === "focus" ? "What shall we focus on?" : "Assemble the team.";
+      const hub = hubOf(config);
+      const pool = GREETINGS[hub][navigator.language.toLowerCase().startsWith("ru") ? "ru" : "en"];
+      title.textContent = pool[Math.floor(Math.random() * pool.length)];
+      title.classList.add("waiting");
+      // a fresh line from the model each time a new chat opens; the local one stays if it's slow
+      const ticket = ++greeting;
+      void generateGreeting(hub).then((line) => {
+        title.classList.remove("waiting");
+        if (!line || ticket !== greeting || !title.isConnected) return;
+        typeInto(title, line);
+      });
       sugg.replaceChildren(...suggestionsFor(ctx, config, main, chat));
       for (const el of [title, sugg]) {
         el.classList.remove("swap");
@@ -115,11 +126,39 @@ export function renderChat(main: HTMLElement, ctx: Ctx, chat: Chat | undefined):
   }
 
   for (const m of chat.messages) list.append(messageEl(ctx, chat, m));
-  main.replaceChildren(head, scroller, h("div", { class: "composer-dock" }, composer, h("p", { class: "disclaimer" }, "Agents can make mistakes. Check important info.")));
+  main.replaceChildren(head, scroller, h("div", { class: "composer-dock" }, composer, h("p", { class: "disclaimer" }, "Focus can make mistakes. Check important info.")));
   requestAnimationFrame(() => (scroller.scrollTop = scroller.scrollHeight));
 }
 
 const hubOf = (c: ChatConfig): Hub => c.hub ?? "aeronus";
+
+/** Shown at once while the model writes a fresh headline (and kept if it doesn't). */
+const GREETINGS: Record<Hub, Record<"en" | "ru", string[]>> = {
+  focus: {
+    en: ["What shall we focus on?", "Go on, surprise me.", "Brain's warmed up. You?", "Big idea or small fix?", "Let's make something good."],
+    ru: ["Ну что, помозгуем?", "Чем удивишь сегодня?", "Мозг разогрет. Начнём?", "Большая идея или мелкий баг?", "Давай сделаем что-то классное."],
+  },
+  aeronus: {
+    en: ["Assemble the team.", "The agents are listening.", "Who's on the case today?", "One task, many minds."],
+    ru: ["Собираем команду.", "Агенты на связи.", "Кого отправим на задание?", "Одна задача, много умов."],
+  },
+};
+
+/** Types a line into an element, a few letters at a time. */
+function typeInto(el: HTMLElement, text: string): void {
+  const chars = [...text];
+  let i = 0;
+  el.textContent = "";
+  el.classList.add("typing");
+  const tick = () => {
+    if (!el.isConnected) return;
+    i = Math.min(chars.length, i + 1 + Math.floor(Math.random() * 2));
+    el.textContent = chars.slice(0, i).join("");
+    if (i < chars.length) setTimeout(tick, 28 + Math.random() * 40);
+    else el.classList.remove("typing");
+  };
+  tick();
+}
 
 const TIER_SUGGESTIONS: Record<Tier, string[]> = {
   storm: ["Explain how DNS works in five sentences.", "Give me ten name ideas for a coffee shop.", "Pros and cons of remote work, in a quick list.", "Translate “good morning” into eight languages."],
@@ -199,7 +238,69 @@ function tierAgent(ctx: Ctx, tier: Tier): Agent {
     ctx.persist();
   }
   const t = TIERS[tier];
-  return { id: `tier-${tier}`, name: t.name, connectionId: conn.id, kind: "chat", model: `tier:${tier}`, effort: "", role: t.role, color: TIER_COLORS[tier], enabled: true, skills: [], avatar: "" };
+  return { id: `tier-${tier}`, name: t.name, connectionId: conn.id, kind: "chat", model: `tier:${tier}`, effort: "", role: `${PERSONA}\n\n${t.role}`, color: TIER_COLORS[tier], enabled: true, skills: [], avatar: "" };
+}
+
+/* ---------- thinking ---------- */
+
+/** What Focus is "doing" while the first words are on their way. Half true, half not. */
+const THINKING = [
+  "Focusating…",
+  "Using the browser…",
+  "Digging in n8n and Zapier…",
+  "Chatting with other AIs…",
+  "Joining the terminal…",
+  "Asking Claude what a CLI is…",
+  "Reading the docs nobody reads…",
+  "Consulting the rubber duck…",
+  "Bribing the GPU with cookies…",
+  "Arguing with Stack Overflow…",
+  "Turning it off and on again…",
+  "Herding tokens…",
+  "Running npm install on my brain…",
+  "git blame-ing the universe…",
+  "Trying very hard not to hallucinate…",
+  "sudo think --harder…",
+  "Asking ChatGPT for a second opinion…",
+  "Untangling the neurons…",
+  "Checking the vibes…",
+  "Waiting for the coffee to brew…",
+  "Pretending this is easy…",
+  "Counting to infinity. Twice…",
+  "Sharpening pixels…",
+  "Compiling a witty answer…",
+  "Googling “how to be smart”…",
+  "Warming up the hamster wheel…",
+];
+
+// one shuffle per visit, so the order surprises but labels don't repeat back to back
+const thinkingOrder = THINKING.map((t) => [Math.random(), t] as const)
+  .sort((a, b) => a[0] - b[0])
+  .map(([, t]) => t);
+
+/**
+ * A label that changes every couple of seconds. It reads the clock rather than counting,
+ * so a re-render mid-stream carries on where it was instead of starting over.
+ */
+function thinkingLabel(): HTMLSpanElement {
+  const el = h("span", { class: "think-label" });
+  const born = Date.now();
+  const at = () => thinkingOrder[Math.floor(Date.now() / 2300) % thinkingOrder.length];
+  el.textContent = at();
+  const timer = setInterval(() => {
+    if (!el.isConnected) {
+      // not attached yet (first frame) or replaced by a newer render
+      if (Date.now() - born > 1000) clearInterval(timer);
+      return;
+    }
+    const next = at();
+    if (next === el.textContent) return;
+    el.textContent = next;
+    el.classList.remove("swap-think");
+    void el.offsetWidth;
+    el.classList.add("swap-think");
+  }, 400);
+  return el;
 }
 
 /* ---------- messages ---------- */
@@ -273,7 +374,7 @@ function stepEl(step: StepRecord, compact: boolean): HTMLElement {
         ? markdownEl(step.text, `md step-md${compact ? " clamp" : ""}`)
         : step.media
           ? h("span")
-          : h("p", { class: "step-wait" }, step.progress ?? "Thinking…");
+          : h("p", { class: "step-wait" }, step.progress ?? thinkingLabel());
   const el = h(
     "div",
     { class: `step ${step.status}` },
@@ -349,7 +450,7 @@ function fillAssistant(ctx: Ctx, chat: Chat, m: Message, el: HTMLElement): void 
   const parts: (Node | null)[] = [head];
   const isSolo = m.mode === "solo";
   const isCompare = m.mode === "compare";
-  if (running && !steps.length) parts.push(h("p", { class: "step-wait" }, h("span", { class: "spinner sm" }), " Thinking…"));
+  if (running && !steps.length) parts.push(h("p", { class: "step-wait" }, h("span", { class: "spinner sm" }), " ", thinkingLabel()));
 
   if (!isSolo && !isCompare && steps.length) {
     const active = steps.filter((s) => s.status === "running");
@@ -395,7 +496,7 @@ function fillAssistant(ctx: Ctx, chat: Chat, m: Message, el: HTMLElement): void 
       ),
     );
   } else if (isSolo && running && steps[0]) {
-    parts.push(steps[0].text ? markdownEl(steps[0].text, "md answer streaming") : h("p", { class: "step-wait" }, h("span", { class: "spinner sm" }), ` ${steps[0].progress ?? "Thinking…"}`));
+    parts.push(steps[0].text ? markdownEl(steps[0].text, "md answer streaming") : h("p", { class: "step-wait" }, h("span", { class: "spinner sm" }), " ", steps[0].progress ?? thinkingLabel()));
   } else if (final) {
     if (m.note) parts.push(h("p", { class: "note" }, m.note));
     parts.push(markdownEl(final.text, "md answer"), mediaEl(final.media, `Result from ${final.agentName}`));
@@ -433,21 +534,33 @@ let frame = 0;
 const dirty = new Set<string>();
 
 /** Re-renders a message on the next frame if its chat is on screen. */
+let lastPaint = 0;
+
+/**
+ * Repaints changed messages on the next frame. Long streams (a whole game being written)
+ * repaint less often, so re-rendering a big Markdown answer never eats every frame.
+ */
 function refresh(chat: Chat, m: Message): void {
   dirty.add(m.id);
   if (frame) return;
-  frame = requestAnimationFrame(() => {
-    frame = 0;
-    if (!view || view.chatId !== chat.id) return dirty.clear();
-    const nearBottom = view.scroller.scrollHeight - view.scroller.scrollTop - view.scroller.clientHeight < 120;
-    for (const id of dirty) {
-      const el = view.list.querySelector<HTMLElement>(`[data-msg="${id}"]`);
-      const msg = chat.messages.find((x) => x.id === id);
-      if (el && msg) fillAssistant(view.ctx, chat, msg, el);
-    }
-    dirty.clear();
-    if (nearBottom) view.scroller.scrollTop = view.scroller.scrollHeight;
-  });
+  const size = (m.steps ?? []).reduce((n, s) => n + s.text.length, m.content.length);
+  const wait = size > 20000 ? 320 : size > 6000 ? 150 : 0;
+  const delay = Math.max(0, lastPaint + wait - performance.now());
+  frame = window.setTimeout(() =>
+    requestAnimationFrame(() => {
+      frame = 0;
+      lastPaint = performance.now();
+      if (!view || view.chatId !== chat.id) return dirty.clear();
+      const nearBottom = view.scroller.scrollHeight - view.scroller.scrollTop - view.scroller.clientHeight < 120;
+      for (const id of dirty) {
+        const el = view.list.querySelector<HTMLElement>(`[data-msg="${id}"]`);
+        const msg = chat.messages.find((x) => x.id === id);
+        if (el && msg) fillAssistant(view.ctx, chat, msg, el);
+      }
+      dirty.clear();
+      if (nearBottom) view.scroller.scrollTop = view.scroller.scrollHeight;
+    }),
+  delay);
 }
 
 /* ---------- running a turn ---------- */

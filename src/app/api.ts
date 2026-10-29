@@ -1,3 +1,4 @@
+import { detectBuild, runBuild, type BuildCall, type BuildKind } from "./builder";
 import { PROVIDERS, TIERS, type Agent, type AgentKind, type Connection, type Tier } from "./store";
 
 export interface ImagePart {
@@ -101,11 +102,12 @@ const stripThinking = (text: string) => text.replace(/<think>[\s\S]*?(<\/think>|
  * visitor gets their own fair-use quota. If the chosen one fails, the
  * Pollinations model takes over.
  */
-async function callFree(model: string, system: string, messages: ChatTurn[], signal: AbortSignal, onText: (full: string) => void): Promise<CallResult> {
+async function callFree(model: string, system: string, messages: ChatTurn[], signal: AbortSignal, onText: (full: string) => void, maxTokens = 8000): Promise<CallResult> {
   const body = (id: string) =>
     JSON.stringify({
       model: id,
       stream: true,
+      max_tokens: maxTokens,
       messages: [
         { role: "system", content: system },
         ...messages.map((m) => ({ role: m.role, content: m.images?.length ? `${m.content}\n\n[An image was attached, but this free model can't see images.]` : m.content })),
@@ -129,6 +131,58 @@ async function callFree(model: string, system: string, messages: ChatTurn[], sig
     onText("");
     return attempt(fallback);
   }
+}
+
+const GREET_KEY = "focus.greetings";
+
+/**
+ * A fresh one-line headline for the empty chat, written by a fast free model.
+ * Resolves to null when no model answers in time; the caller keeps its own line then.
+ */
+export async function generateGreeting(hub: "focus" | "aeronus"): Promise<string | null> {
+  if (import.meta.env.VITE_ARTIFACT === "1") return null;
+  const ru = navigator.language.toLowerCase().startsWith("ru");
+  let recent: string[] = [];
+  try {
+    recent = JSON.parse(localStorage.getItem(GREET_KEY) ?? "[]") as string[];
+  } catch {
+    // no history yet
+  }
+  const hour = new Date().getHours();
+  const time = hour < 5 ? "deep night" : hour < 12 ? "morning" : hour < 18 ? "afternoon" : "evening";
+  const what = hub === "focus" ? "Focus, a sharp, witty AI assistant" : "Aeronus, a hub where a whole team of AI agents works on one task";
+  const system = `You write the one headline on the empty start screen of ${what}. Write ONE fresh line of 2 to 7 words in ${ru ? "Russian" : "English"} that invites the user to start. Clever, warm, a little cheeky; vary the form (a question, a quip, an invitation, a tiny joke). It is ${time} for the user. No quotes, no hashtags, at most one emoji, nothing generic like "How can I help you?". Reply with the line only.`;
+  const user = `A new one, please.${recent.length ? ` Not like these: ${recent.slice(0, 6).join(" | ")}` : ""}`;
+  for (const [url, model] of [
+    [FREE_URLS.llm7, "mistral-Nemo-Instruct-2407"],
+    [FREE_URLS.pollinations, "openai-fast"],
+  ]) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ model, temperature: 1.05, max_tokens: 40, messages: [{ role: "system", content: system }, { role: "user", content: user }] }),
+        signal: AbortSignal.timeout(6000),
+      });
+      if (!res.ok) continue;
+      const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+      const line = stripThinking(data.choices?.[0]?.message?.content ?? "")
+        .split("\n")
+        .map((l) => l.trim())
+        .find(Boolean)
+        ?.replace(/^["'«“#*\s]+|["'»”*\s]+$/g, "");
+      if (!line || line.length < 3 || line.length > 70) continue;
+      try {
+        localStorage.setItem(GREET_KEY, JSON.stringify([line, ...recent].slice(0, 10)));
+      } catch {
+        // storage full or blocked: only the no-repeat memory is lost
+      }
+      return line;
+    } catch {
+      // try the next free model
+    }
+  }
+  return null;
 }
 
 let userConnections: Connection[] = [];
@@ -160,17 +214,17 @@ async function callInArtifact(agent: Agent, system: string, messages: ChatTurn[]
 let serverOpenRouter: boolean | undefined;
 
 /** A Focus tier: tries its OpenRouter models, then keyless free ones, until one answers. */
-async function callTier(tier: Tier, agent: Agent, conn: Connection, system: string, messages: ChatTurn[], signal: AbortSignal, onText: (full: string) => void): Promise<CallResult> {
-  const t = TIERS[tier];
+const shortModel = (m: string) => m.replace(/^(openrouter|llm7|pollinations)\//, "").replace(/^[\w-]+\//, "").replace(/:free$/, "");
+
+/** Tries each model in turn until one answers; returns which one did. */
+async function chainCall(models: string[], agent: Agent, conn: Connection, system: string, messages: ChatTurn[], signal: AbortSignal, onText: (full: string) => void, maxTokens?: number): Promise<CallResult & { used: string }> {
   const own = userConnections.some((c) => c.provider === "openrouter" && c.apiKey);
-  const attempts = [...(own || serverOpenRouter !== false ? t.or.slice(0, 2).map((m) => `openrouter/${m}`) : []), ...t.free];
   let last: unknown;
-  for (const model of attempts) {
+  for (const model of models) {
     if (model.startsWith("openrouter/") && !own && serverOpenRouter === false) continue;
     try {
-      onText("");
-      const r = await callAgent({ ...agent, model }, conn, system, messages, signal, onText);
-      return { ...r, model: `${model.replace(/^(openrouter|llm7|pollinations)\//, "").replace(/:free$/, "")}` };
+      const r = await callAgent({ ...agent, model }, conn, system, messages, signal, onText, { maxTokens });
+      return { ...r, used: model };
     } catch (error) {
       if (signal.aborted) throw error;
       last = error;
@@ -182,6 +236,38 @@ async function callTier(tier: Tier, agent: Agent, conn: Connection, system: stri
   throw new Error(`No free model answered right now${why ? ` (${why.replace(/\.$/, "")})` : ""}. Wait a minute and try again, or add your own key in Connections.`);
 }
 
+const tierModels = (tier: Tier) => {
+  const t = TIERS[tier];
+  const own = userConnections.some((c) => c.provider === "openrouter" && c.apiKey);
+  return [...(own || serverOpenRouter !== false ? t.or.slice(0, 2).map((m) => `openrouter/${m}`) : []), ...t.free];
+};
+
+/**
+ * A Focus tier: tries its OpenRouter models, then keyless free ones, until one answers.
+ * Requests to build something go to the Builder, on the strongest models, whatever the tier.
+ */
+async function callTier(tier: Tier, agent: Agent, conn: Connection, system: string, messages: ChatTurn[], signal: AbortSignal, onText: (full: string) => void): Promise<CallResult> {
+  const ask = messages.at(-1)?.content ?? "";
+  // a new build request, or a change to the thing built in the previous answer
+  const previous = /<!--\s*focus:preview kind=(\w+)/.exec([...messages].reverse().find((m) => m.role === "assistant")?.content ?? "")?.[1] as BuildKind | undefined;
+  const kind = detectBuild(ask) ?? (previous && ask.length < 600 && !/\?\s*$/.test(ask) ? previous : null);
+  if (kind) {
+    let sticky: string | undefined;
+    const models = [...new Set([...tierModels("clorus"), ...tierModels(tier)])];
+    const call: BuildCall = async (sys, msgs, cb, maxTokens) => {
+      const order = sticky ? [sticky, ...models.filter((m) => m !== sticky)] : models;
+      // the Focus personality sets the tone; the builder's rules come last so they win
+      const r = await chainCall(order, agent, conn, `${system}\n\n${sys}`, msgs, signal, cb, maxTokens);
+      sticky = r.used;
+      return r;
+    };
+    const text = await runBuild(kind, messages, call, onText, signal);
+    return { text, model: `Builder · ${sticky ? shortModel(sticky) : "free models"}` };
+  }
+  const r = await chainCall(tierModels(tier), agent, conn, system, messages, signal, (t) => onText(t));
+  return { ...r, model: shortModel(r.used) };
+}
+
 /** Calls one chat agent and streams its text into `onText`. */
 export async function callAgent(
   agent: Agent,
@@ -190,15 +276,16 @@ export async function callAgent(
   messages: ChatTurn[],
   signal: AbortSignal,
   onText: (full: string) => void,
+  opts: { maxTokens?: number } = {},
 ): Promise<CallResult> {
+  if (agent.model.startsWith("tier:")) return callTier(agent.model.slice(5) as Tier, agent, conn, system, messages, signal, onText);
   if (import.meta.env.VITE_ARTIFACT === "1") return callInArtifact(agent, system, messages, signal, onText);
   if (conn.provider === "ollama") return callOllama(agent, conn, system, messages, signal, onText);
-  if (agent.model.startsWith("tier:")) return callTier(agent.model.slice(5) as Tier, agent, conn, system, messages, signal, onText);
   if (conn.provider === "focus" && agent.model.startsWith("openrouter/")) {
     const own = userConnections.find((c) => c.provider === "openrouter" && c.apiKey);
-    if (own) return callAgent({ ...agent, model: agent.model.slice("openrouter/".length) }, own, system, messages, signal, onText);
+    if (own) return callAgent({ ...agent, model: agent.model.slice("openrouter/".length) }, own, system, messages, signal, onText, opts);
   }
-  if (conn.provider === "focus" && agent.kind === "chat" && /^(llm7|pollinations)\//.test(agent.model)) return callFree(agent.model, system, messages, signal, onText);
+  if (conn.provider === "focus" && agent.kind === "chat" && /^(llm7|pollinations)\//.test(agent.model)) return callFree(agent.model, system, messages, signal, onText, opts.maxTokens);
 
   const res = await fetch("/api/run", {
     method: "POST",

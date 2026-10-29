@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
     <meta name="theme-color" content="#08080a" />
     <meta name="color-scheme" content="light dark" />
     <meta
@@ -10,6 +10,7 @@
       content="Focus by Team Swift — run Claude, GPT, Gemini, Grok and free models together as one team, with video generators and autonomous agents."
     />
     <title>Focus</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link
       rel="preload"
       href="/fonts/inter-latin-wght.woff2"
@@ -39,9 +40,9 @@
       <header class="nav glass-nav">
         <nav class="nav-group" aria-label="Sections">
           <a href="#demo" data-scroll>Demo</a>
+          <a href="#tiers" data-scroll>Tiers</a>
           <a href="#features" data-scroll>Features</a>
-          <a href="#modes" data-scroll>Modes</a>
-          <a href="#models" data-scroll>Models</a>
+          <a href="#modes" data-scroll>Aeronus</a>
           <a href="#faq" data-scroll>FAQ</a>
         </nav>
         <nav class="nav-group nav-social" aria-label="More">
@@ -92,9 +93,9 @@
 
           <footer class="foot">
             <p class="lede">
-              Every model in one place. Plug in Claude, GPT, Gemini or Grok and let them work as a
-              team — then add video generators and autonomous agents like Manus or Jules, all focused
-              on one task.
+              Focus is an AI that thinks, jokes and builds. Ask it anything, or have it make a game,
+              a website, an app or a deck that runs right in the chat. Free, no sign-up. Need a whole
+              team? Flip to Aeronus.
             </p>
             <div class="foot-end">
               <span class="rule" aria-hidden="true"></span>
@@ -119,57 +120,85 @@
           <div class="wrap">
             <p class="eyebrow" data-reveal>What is Focus</p>
             <h2 class="statement" id="intro-title" data-words>
-              One chat. Every model. A whole team of AI working on your task.
+              One AI that thinks fast, talks like a person and builds what you ask.
             </h2>
             <p class="intro-lede" data-reveal>
-              Focus lets Claude, GPT, Gemini, Grok and free open models answer, argue, review and build
-              together — then hands the result to video generators and autonomous agents. You see every
-              step as it happens.
+              Focus runs on the best free models and picks the right one for the job. Storm answers in a
+              flash, GEN handles everyday work, and Clorus writes, tests and fixes real games, sites,
+              apps and presentations. When one mind isn't enough, Aeronus puts Claude, GPT, Gemini and
+              friends on the same task.
             </p>
             <dl class="stats">
-              <div class="stat" data-reveal><dt>team modes</dt><dd data-count="8">8</dd></div>
-              <div class="stat" data-reveal><dt>connections</dt><dd data-count="29">29</dd></div>
+              <div class="stat" data-reveal><dt>tiers: Storm, GEN, Clorus</dt><dd data-count="3">3</dd></div>
+              <div class="stat" data-reveal><dt>things it builds: games, sites, apps, decks</dt><dd data-count="4">4</dd></div>
               <div class="stat" data-reveal><dt>models via OpenRouter alone</dt><dd data-count="460" data-suffix="+">460+</dd></div>
               <div class="stat" data-reveal><dt>to start — no key, no sign-up</dt><dd>$0</dd></div>
             </dl>
           </div>
         </section>
 
+
         <section class="demo" id="demo" aria-labelledby="demo-title">
           <div class="wrap">
             <div class="section-head">
               <p class="eyebrow" data-reveal>See it work</p>
-              <h2 id="demo-title" data-reveal>Two models argue. You get the answer.</h2>
-              <p data-reveal>This is how Debate mode looks: Claude and GPT take sides, Gemini judges.</p>
+              <h2 id="demo-title" data-reveal>Ask for a game. Get a game.</h2>
+              <p data-reveal>Clorus writes it, runs it, fixes its own bugs and hands it over, playable right in the chat.</p>
             </div>
-            <div class="demo-window glass" data-reveal data-demo>
+            <div class="demo-window glass" data-reveal data-build-demo>
               <div class="demo-bar">
                 <span class="demo-dots" aria-hidden="true"><i></i><i></i><i></i></span>
                 <span class="demo-url">focus-agents.vercel.app/app</span>
-                <span class="demo-chip">Debate · 3 agents</span>
+                <span class="demo-chip"><span class="demo-chip-focus">Focus</span> · <span class="tier-name-clorus">Clorus</span></span>
               </div>
-              <div class="demo-body" aria-live="off">
-                <p class="demo-user">Should a three-person startup build its own AI stack, or just use APIs?</p>
-                <div class="demo-pair">
-                  <article class="demo-agent" style="--c: #d97757" data-agent="0">
-                    <header><i>C</i><b>Claude</b><span class="demo-side">For APIs</span><em class="demo-status">waiting</em></header>
-                    <p class="demo-text"></p>
-                  </article>
-                  <article class="demo-agent" style="--c: #10a37f" data-agent="1">
-                    <header><i>G</i><b>GPT</b><span class="demo-side">For building</span><em class="demo-status">waiting</em></header>
-                    <p class="demo-text"></p>
-                  </article>
+              <div class="demo-body">
+                <p class="demo-user">Make me a snake game with a neon look</p>
+                <ol class="bd-steps" aria-live="off">
+                  <li data-step="0">Focusating…</li>
+                  <li data-step="1">Building your game…</li>
+                  <li data-step="2">Found 1 error while testing, fixing…</li>
+                  <li data-step="3">Tested: it runs without errors</li>
+                </ol>
+                <div class="bd-preview" aria-label="A snake game playing itself">
+                  <canvas class="bd-canvas" width="640" height="360"></canvas>
+                  <span class="bd-score">Score <b>0</b></span>
                 </div>
-                <article class="demo-agent demo-judge" style="--c: #4285f4" data-agent="2">
-                  <header><i>G</i><b>Gemini</b><span class="demo-side">Judge</span><em class="demo-status">waiting</em></header>
-                  <p class="demo-text"></p>
-                </article>
               </div>
               <div class="demo-composer">
-                <span class="demo-input">Message your team…</span>
-                <button class="demo-replay" type="button" data-demo-replay>Replay</button>
+                <span class="demo-input">Ask Clorus…</span>
+                <button class="demo-replay" type="button" data-build-replay>Replay</button>
                 <a class="demo-try" href="/app" data-route>Try it free</a>
               </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="tiers" id="tiers" aria-labelledby="tiers-title">
+          <div class="wrap">
+            <div class="section-head">
+              <p class="eyebrow" data-reveal>Three tiers</p>
+              <h2 id="tiers-title" data-reveal>One Focus. Three ways to think.</h2>
+              <p data-reveal>Pick how hard it should think. Switch any time, even mid-chat.</p>
+            </div>
+            <div class="tier-cards">
+              <article class="tier-card glass tc-storm" data-reveal>
+                <h3 class="tc-name">Storm</h3>
+                <p class="tc-tag">Lightning fast</p>
+                <p>The lightest models, tuned for speed. Quick facts, names, translations and one-liners, before you finish blinking.</p>
+                <ul><li>“Ten names for a coffee shop”</li><li>“Translate this into Spanish”</li></ul>
+              </article>
+              <article class="tier-card glass tc-gen" data-reveal>
+                <h3 class="tc-name">GEN</h3>
+                <p class="tc-tag">Everyday brain</p>
+                <p>Mid-size models with a good balance of speed and sense. Emails, plans, explanations and honest second opinions.</p>
+                <ul><li>“Plan three days in Tokyo”</li><li>“Explain recursion like I'm five”</li></ul>
+              </article>
+              <article class="tier-card glass tc-clorus" data-reveal>
+                <h3 class="tc-name">Clorus</h3>
+                <p class="tc-tag">Thinks deep, builds things</p>
+                <p>The most capable models. Hard questions, real code, and finished games, websites, apps and presentations you can open right away.</p>
+                <ul><li>“Build a neon snake game”</li><li>“A pitch deck for my startup”</li></ul>
+              </article>
             </div>
           </div>
         </section>
@@ -178,8 +207,8 @@
           <div class="wrap">
             <div class="section-head">
               <p class="eyebrow" data-reveal>Features</p>
-              <h2 id="features-title" data-reveal>Everything a team of models needs.</h2>
-              <p data-reveal>From a free first message to hour-long agent runs — in one calm chat.</p>
+              <h2 id="features-title" data-reveal>Smart, fast and actually useful.</h2>
+              <p data-reveal>Everything Focus can do for you, from a free first message to a whole team of agents.</p>
             </div>
 
             <div class="bento">
@@ -191,10 +220,10 @@
                   <span class="orbit orbit-4"><i style="--c: #3a3a3c">X</i></span>
                   <span class="orbit-core">Focus</span>
                 </div>
-                <h3>A team, not a chatbot</h3>
+                <h3>Aeronus, when one mind isn't enough</h3>
                 <p>
-                  Eight ways to work together: compare answers side by side, merge them, vote, debate,
-                  pass work down a relay, review drafts or split a plan across agents.
+                  Flip the switch and Claude, GPT, Gemini, Grok, Mistral and Qwen work as a team: compare,
+                  merge, vote, debate, relay, review or split a plan.
                 </p>
               </article>
 
@@ -286,9 +315,9 @@
         <section class="modes-sec" id="modes" aria-labelledby="modes-title">
           <div class="wrap">
             <div class="section-head">
-              <p class="eyebrow" data-reveal>Modes</p>
-              <h2 id="modes-title" data-reveal>Eight ways to work together.</h2>
-              <p data-reveal>Pick one in the message box. Here is how the team passes the work.</p>
+              <p class="eyebrow" data-reveal>Aeronus · agent hub</p>
+              <h2 id="modes-title" data-reveal>Need a team? Eight ways it works.</h2>
+              <p data-reveal>Switch Focus to Aeronus, add the models you like and pick a mode. Here is how the team passes the work.</p>
             </div>
             <div class="modes-ui" data-reveal>
               <div class="mode-tabs" role="tablist" aria-label="Modes">
@@ -304,6 +333,45 @@
               <div class="mode-stage glass" role="tabpanel">
                 <svg class="mode-svg" viewBox="0 0 560 400" role="img" aria-label="How the selected mode passes work between agents"></svg>
                 <p class="mode-caption" aria-live="polite"></p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="demo demo-aeronus" id="aeronus-demo" aria-labelledby="aeronus-demo-title">
+          <div class="wrap">
+            <div class="section-head">
+              <p class="eyebrow" data-reveal>Aeronus in action</p>
+              <h2 id="aeronus-demo-title" data-reveal>Two models argue. You get the answer.</h2>
+              <p data-reveal>This is how Debate mode looks: Claude and GPT take sides, Gemini judges.</p>
+            </div>
+            <div class="demo-window glass" data-reveal data-demo>
+              <div class="demo-bar">
+                <span class="demo-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+                <span class="demo-url">focus-agents.vercel.app/app</span>
+                <span class="demo-chip">Debate · 3 agents</span>
+              </div>
+              <div class="demo-body" aria-live="off">
+                <p class="demo-user">Should a three-person startup build its own AI stack, or just use APIs?</p>
+                <div class="demo-pair">
+                  <article class="demo-agent" style="--c: #d97757" data-agent="0">
+                    <header><i>C</i><b>Claude</b><span class="demo-side">For APIs</span><em class="demo-status">waiting</em></header>
+                    <p class="demo-text"></p>
+                  </article>
+                  <article class="demo-agent" style="--c: #10a37f" data-agent="1">
+                    <header><i>G</i><b>GPT</b><span class="demo-side">For building</span><em class="demo-status">waiting</em></header>
+                    <p class="demo-text"></p>
+                  </article>
+                </div>
+                <article class="demo-agent demo-judge" style="--c: #4285f4" data-agent="2">
+                  <header><i>G</i><b>Gemini</b><span class="demo-side">Judge</span><em class="demo-status">waiting</em></header>
+                  <p class="demo-text"></p>
+                </article>
+              </div>
+              <div class="demo-composer">
+                <span class="demo-input">Message your team…</span>
+                <button class="demo-replay" type="button" data-demo-replay>Replay</button>
+                <a class="demo-try" href="/app" data-route>Try it free</a>
               </div>
             </div>
           </div>
@@ -371,6 +439,14 @@
             </div>
             <div class="faq-list glass">
               <details class="qa" data-reveal>
+                <summary>What is Focus?</summary>
+                <div class="qa-body"><p>An AI assistant by Team Swift that answers like a smart, funny friend and builds things on request. It has three tiers: Storm for speed, GEN for everyday work and Clorus for deep thinking and building. Aeronus, the agent hub, is there when you want several AIs on one task.</p></div>
+              </details>
+              <details class="qa" data-reveal>
+                <summary>Can it really build games, websites and presentations?</summary>
+                <div class="qa-body"><p>Yes. Ask for one and Focus writes the whole thing, runs it in a sandbox, fixes the errors it finds and shows it working in the chat. Open it full screen or download the file. Presentations use a designed slide template, so they always look sharp.</p></div>
+              </details>
+              <details class="qa" data-reveal>
                 <summary>Is Focus free?</summary>
                 <div class="qa-body"><p>Yes. The built-in free models and Focus Image work without a key. For Claude, GPT, Gemini, Grok, video generators and agents you add your own keys and pay those providers directly — Focus adds nothing on top.</p></div>
               </details>
@@ -414,7 +490,7 @@
           <div class="wrap final-wrap glass final-card">
             <span class="final-pill" data-reveal aria-hidden="true"><video class="mini-video" src="https://d2ol7oe51mr4n9.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/175fbbcd-e50a-480c-bab2-ca16d4678322.mp4" poster="https://d2ol7oe51mr4n9.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/726b168c-da47-4682-a255-cc3e02f89bae.jpg" muted loop playsinline preload="none"></video></span>
             <h2 id="final-title" data-reveal>Ready to focus?</h2>
-            <p data-reveal>Your first team is one message away.</p>
+            <p data-reveal>Your next idea is one message away.</p>
             <div class="final-actions" data-reveal>
               <a class="cta cta-lg" href="/app" data-route>Let's Focus</a>
               <a class="text-link glass" href="https://github.com/GX85/Landing-for-Claude-code-">View on GitHub →</a>
@@ -426,8 +502,8 @@
       <footer class="site-foot">
         <div class="wrap site-foot-inner">
           <div class="site-foot-brand">
-            <span class="site-foot-logo">Focus</span>
-            <p>Every model, one team.<br />Made by Team Swift.</p>
+            <span class="site-foot-logo"><span data-mark></span>Focus</span>
+            <p>One AI that thinks, jokes and builds.<br />Made by Team Swift.</p>
           </div>
           <nav class="site-foot-links" aria-label="Footer">
             <div>

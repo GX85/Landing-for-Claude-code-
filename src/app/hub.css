@@ -33,13 +33,15 @@
 /* ---------- the mark ---------- */
 
 .focus-mark {
+  --logo-fg: var(--ink);
   display: block;
-  overflow: visible;
+  overflow: hidden;
   filter: drop-shadow(0 6px 16px var(--glow));
 }
 
-.focus-mark .px {
-  animation: px-flicker 3.4s ease-in-out infinite;
+/* the diagonal shimmers once when the hub changes, not all the time */
+.focus-mark.burst .px {
+  animation: px-flicker 0.9s ease-in-out 2;
 }
 
 @keyframes px-flicker {
@@ -78,6 +80,7 @@
 
 .hello-logo::before {
   content: "";
+  will-change: transform, opacity;
   position: absolute;
   inset: -26%;
   border-radius: 50%;
@@ -459,8 +462,6 @@ html.dark .tier-thumb {
     order: 5;
     flex: 1 0 100%;
     padding-top: 4px;
-    overflow-x: auto;
-    scrollbar-width: none;
   }
   .tier-seg {
     flex: 1;
@@ -580,5 +581,93 @@ html.dark .app-root .md code {
   }
   .head-actions .sound-btn {
     display: none;
+  }
+}
+
+
+/* chat text must never show through the message box */
+.composer-dock .composer {
+  background: color-mix(in srgb, var(--scroll-edge) 94%, transparent);
+}
+.composer-dock::before {
+  background: linear-gradient(to top, var(--scroll-edge) 55%, transparent);
+}
+.step {
+  min-width: 0;
+}
+
+/* the AI-written greeting: a soft shimmer while it's being written, a caret while it types */
+.hello-title.waiting {
+  animation: title-wait 1.6s ease-in-out infinite;
+}
+@keyframes title-wait {
+  50% {
+    opacity: 0.55;
+  }
+}
+.hello-title.typing::after {
+  content: "";
+  display: inline-block;
+  width: 0.08em;
+  height: 0.9em;
+  margin-left: 0.08em;
+  background: hsl(var(--h) 95% 60%);
+  vertical-align: -0.08em;
+  animation: blink 0.9s steps(2) infinite;
+}
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+.hello-title {
+  min-height: 1.3em;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+
+/* a built page: the live preview leads, the code is folded below it */
+.code-block.built {
+  display: flex;
+  flex-direction: column;
+}
+.code-block.built .code-head {
+  order: 0;
+}
+.code-block.built .code-preview {
+  order: 1;
+  border-top: 0;
+  height: min(520px, 70vh);
+}
+.code-block.built pre {
+  order: 2;
+  max-height: 180px;
+  overflow: auto;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  opacity: 0.75;
+}
+
+.think-label {
+  display: inline-block;
+  background: linear-gradient(90deg, var(--ink-3) 0%, var(--ink) 45%, var(--ink-3) 90%) 0 0 / 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: think-shine 2.2s linear infinite;
+}
+.think-label.swap-think {
+  animation: think-shine 2.2s linear infinite, swap-in 0.45s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+@keyframes think-shine {
+  to {
+    background-position: -200% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .think-label,
+  .think-label.swap-think {
+    animation: none;
+    color: var(--ink-3);
   }
 }
