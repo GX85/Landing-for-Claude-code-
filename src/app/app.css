@@ -2188,3 +2188,13 @@ html.dark .app-root .chat-item.active {
 .composer > textarea {
   padding-right: 40px;
 }
+
+/* the bar is solid under the buttons so text scrolling beneath never shows through them */
+.app-root .main-head {
+  height: 60px;
+  background: linear-gradient(to bottom, var(--bg) 0, var(--bg) 80%, transparent) !important;
+}
+
+html.dark .app-root .main-head {
+  background: linear-gradient(to bottom, #0b0b0d 0, #0b0b0d 80%, transparent) !important;
+}

@@ -1053,7 +1053,18 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onH
       micBtn.classList.remove("on");
       sync();
     };
+    let started = false;
+    rec.onstart = () => (started = true);
+    const current = rec;
     rec.start();
+    // some embedded views never start the recogniser and never say why
+    setTimeout(() => {
+      if (!started && rec === current && wanted) {
+        wanted = false;
+        stopVoice();
+        alert(tr("Allow the microphone for this site to dictate. If Focus is open inside another page, open it in its own tab."));
+      }
+    }, 6000);
   };
   micBtn.addEventListener("click", () => {
     if (!Rec) {
