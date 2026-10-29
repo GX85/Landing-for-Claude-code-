@@ -1644,3 +1644,9 @@ html.dark .app-root .md code {
 .think-marks button.on {
   transform: scale(1.08);
 }
+
+.popover {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}

@@ -2364,3 +2364,10 @@
   letter-spacing: 0.04em;
   cursor: pointer;
 }
+
+/* "Let's Focus": once the window has closed to its hairline the word fades away too */
+.landing.dim .word,
+.landing.dim .half {
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}

@@ -152,7 +152,12 @@ async function enterApp(path: string): Promise<void> {
   if (busy) return;
   busy = true;
   // the collapse only makes sense while the hero is on screen
-  if (!reducedMotion && scrollY < innerHeight * 0.3) await collapse();
+  if (!reducedMotion && scrollY < innerHeight * 0.3) {
+    await collapse();
+    // the screen goes dark: the word fades out of the hairline before the app opens from it
+    root.classList.add("dim");
+    await new Promise((r) => setTimeout(r, 380));
+  }
   busy = false;
   onEnter(path);
 }
@@ -263,6 +268,7 @@ export async function showLanding(enter: (path: string) => void): Promise<void> 
 }
 
 export function hideLanding(): void {
+  root.classList.remove("dim");
   generation++;
   clear();
   video.pause();

@@ -869,8 +869,12 @@ function openPopover(anchor: HTMLElement, content: HTMLElement): void {
   // what's behind it when no glass ancestor is in the way
   const r = anchor.getBoundingClientRect();
   const left = Math.max(12, Math.min(r.left, innerWidth - 352));
-  if (r.top > innerHeight / 2) Object.assign(popover.style, { left: `${left}px`, bottom: `${innerHeight - r.top + 8}px` });
-  else Object.assign(popover.style, { left: `${left}px`, top: `${r.bottom + 8}px` });
+  // open on the side with more room and never taller than that room, so every row can be scrolled to
+  const view = window.visualViewport?.height ?? innerHeight;
+  const below = view - r.bottom - 20;
+  const above = r.top - 20;
+  if (below >= 260 || below >= above) Object.assign(popover.style, { left: `${left}px`, top: `${r.bottom + 8}px`, maxHeight: `${Math.max(160, Math.min(520, below))}px` });
+  else Object.assign(popover.style, { left: `${left}px`, bottom: `${view - r.top + 8}px`, maxHeight: `${Math.max(160, Math.min(520, above))}px` });
   anchor.closest(".app-root")!.append(popover);
   // keep the whole popover on screen, whatever its real width
   // offsetWidth ignores the opening scale animation, so this is the real size
@@ -878,7 +882,12 @@ function openPopover(anchor: HTMLElement, content: HTMLElement): void {
   popover.style.left = `${Math.max(12, Math.min(r.left, innerWidth - w - 12))}px`;
 }
 
-addEventListener("resize", closePopover);
+// a phone's address bar sliding away resizes the page; only a real change of width (a turned screen) closes the menu
+let popoverWidth = innerWidth;
+addEventListener("resize", () => {
+  if (innerWidth !== popoverWidth) closePopover();
+  popoverWidth = innerWidth;
+});
 
 /** The one-line note under the message box that follows whatever is selected. */
 function captionFor(ctx: Ctx, config: ChatConfig, hub: Hub, fa?: FocusAgent): string {
