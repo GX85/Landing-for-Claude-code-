@@ -27,7 +27,13 @@ function agentPayload(agent: Agent, conn: Connection) {
 
 async function errorFrom(res: Response): Promise<Error> {
   const data = (await res.json().catch(() => ({}))) as { error?: string };
-  return new Error(data.error || `Request failed (${res.status}).`);
+  let where = "";
+  try {
+    where = new URL(res.url).pathname;
+  } catch {
+    // no url on a synthetic response
+  }
+  return new Error(data.error || (res.status === 404 || res.status === 0 ? tr("This feature needs the Focus server, which isn't reachable here.") : `Request failed (${res.status}${where ? ` ${where}` : ""}).`));
 }
 
 const ollamaBase = (conn: Connection) => (conn.baseUrl.trim() || PROVIDERS.ollama.urlPlaceholder!).replace(/\/+$/, "");
