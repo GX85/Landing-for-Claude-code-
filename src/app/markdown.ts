@@ -114,3 +114,63 @@ export function renderMarkdown(el: HTMLElement, source: string): void {
     wrap.append(head, pre);
   }
 }
+
+/* ---------- streaming ---------- */
+
+interface Live {
+  frozen: number;
+  tail: HTMLElement;
+  code: HTMLElement;
+}
+const live = new WeakMap<HTMLElement, Live>();
+
+/** The index just after the last blank line that is not inside a code fence, or 0. */
+function safeBoundary(text: string): number {
+  let fences = 0;
+  let boundary = 0;
+  for (let i = 0; i < text.length; i++) {
+    if (text.startsWith("```", i) && (i === 0 || text[i - 1] === "\n")) {
+      fences++;
+      i += 2;
+    } else if (text[i] === "\n" && text[i + 1] === "\n" && fences % 2 === 0) boundary = i + 2;
+  }
+  return boundary;
+}
+
+/**
+ * Renders a growing answer without redoing the work: paragraphs that are finished are rendered once and kept,
+ * only the last unfinished one is parsed again, and an unfinished code block is shown as plain text.
+ * A whole game streaming in as code costs one text update per frame instead of a full parse.
+ */
+export function renderMarkdownStreaming(el: HTMLElement, source: string): void {
+  let st = live.get(el);
+  if (!st) {
+    st = { frozen: 0, tail: document.createElement("div"), code: document.createElement("pre") };
+    st.code.className = "stream-code";
+    el.replaceChildren(st.tail);
+    live.set(el, st);
+  }
+  const boundary = safeBoundary(source);
+  if (boundary < st.frozen) {
+    // the text changed underneath us (a retry): start over
+    el.replaceChildren(st.tail);
+    st.frozen = 0;
+  }
+  if (boundary > st.frozen) {
+    const block = document.createElement("div");
+    renderMarkdown(block, source.slice(st.frozen, boundary));
+    el.insertBefore(block, st.tail);
+    st.frozen = boundary;
+  }
+  const rest = source.slice(st.frozen);
+  const open = rest.search(/(^|\n)```/);
+  const fenced = open >= 0 && (rest.slice(open).match(/(^|\n)```/g)?.length ?? 0) % 2 === 1;
+  if (fenced) {
+    const start = open + (rest[open] === "\n" ? 1 : 0);
+    renderMarkdown(st.tail, rest.slice(0, start));
+    const body = rest.slice(start).replace(/^```[^\n]*\n?/, "");
+    st.code.textContent = body;
+    st.code.scrollTop = st.code.scrollHeight;
+    st.tail.append(st.code);
+  } else renderMarkdown(st.tail, rest);
+}

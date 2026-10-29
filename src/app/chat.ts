@@ -1,13 +1,14 @@
 import type { Ctx } from "./app";
 import type { ChatTurn } from "./api";
 import { h, icon, pageHead, seconds } from "./dom";
-import { renderMarkdown } from "./markdown";
+import { renderMarkdown, renderMarkdownStreaming } from "./markdown";
 import { ACCEPT, dataUrlOf, readAttachment } from "./attachments";
 import { generateGreeting, resolveMedia, setConnections, type ImagePart } from "./api";
 import { modeInfo, MODES, startRun } from "./modes";
 import { click, setSound } from "./sound";
 import { agentAvatar, applyHub, focusMark } from "./brand";
 import { agentMascot } from "../mascot";
+import { typeInto as handWrite, typePlaceholder } from "./typing";
 import { allSkills, connectionOf, isReady, KIND_LABEL, missing, newConnection, PERSONA, PROVIDERS, TIER_ORDER, TIERS, uid, type Agent, type Attachment, type Chat, type ChatConfig, type FocusAgent, type Hub, type Message, type StepRecord, type Tier } from "./store";
 
 const SCENE_VIDEO = "https://d2ol7oe51mr4n9.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/175fbbcd-e50a-480c-bab2-ca16d4678322.mp4";
@@ -398,6 +399,15 @@ function stepTime(step: StepRecord): string {
   return seconds((step.endedAt ?? Date.now()) - step.startedAt);
 }
 
+/** One growing element per streaming answer, so each update only parses what is new. */
+const streamEls = new Map<string, HTMLElement>();
+function streamingEl(key: string, text: string, cls: string): HTMLElement {
+  let el = streamEls.get(key);
+  if (!el) streamEls.set(key, (el = h("div", { class: cls })));
+  renderMarkdownStreaming(el, text);
+  return el;
+}
+
 function markdownEl(text: string, cls = "md"): HTMLElement {
   const el = h("div", { class: cls });
   renderMarkdown(el, text);
@@ -573,7 +583,7 @@ function fillAssistant(ctx: Ctx, chat: Chat, m: Message, el: HTMLElement): void 
       ),
     );
   } else if (isSolo && running && steps[0]) {
-    parts.push(steps[0].text ? markdownEl(steps[0].text, "md answer streaming") : h("p", { class: "step-wait" }, thinkMark(), " ", steps[0].progress ?? thinkingLabel()));
+    parts.push(steps[0].text ? streamingEl(`${m.id}:${steps[0].id}`, steps[0].text, "md answer streaming") : h("p", { class: "step-wait" }, thinkMark(), " ", steps[0].progress ?? thinkingLabel()));
   } else if (final) {
     if (m.note) parts.push(h("p", { class: "note" }, m.note));
     parts.push(markdownEl(final.text, "md answer"), mediaEl(final.media, `Result from ${final.agentName}`));
@@ -586,6 +596,7 @@ function fillAssistant(ctx: Ctx, chat: Chat, m: Message, el: HTMLElement): void 
   if (m.status === "stopped") parts.push(h("div", { class: "msg-stopped" }, "Stopped."));
 
   if (!running) {
+    for (const k of streamEls.keys()) if (k.startsWith(`${m.id}:`)) streamEls.delete(k);
     const isLast = chat.messages.at(-1) === m;
     const usage = steps.reduce((n, s) => n + (s.usage ? s.usage.input + s.usage.output : 0), 0);
     parts.push(
@@ -850,9 +861,19 @@ function openPopover(anchor: HTMLElement, content: HTMLElement): void {
 
 addEventListener("resize", closePopover);
 
+/** The one-line note under the message box that follows whatever is selected. */
+function captionFor(ctx: Ctx, config: ChatConfig, hub: Hub, fa?: FocusAgent): string {
+  if (hub === "aeronus") return `Aeronus · ${modeInfo(config.mode).name}: ${modeInfo(config.mode).short}`;
+  if (fa) return `${fa.name || "Your agent"} · your own agent`;
+  const t = TIERS[config.tier];
+  const level = config.think ? ` · ${THINK[config.think].name}` : "";
+  return `${t.name} · ${t.tag}${level}`;
+}
+
 function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onHubChange?: () => void): HTMLElement {
   const input = h("textarea", { rows: 1, placeholder: "Message your team…", "aria-label": "Message" });
   const files = h("div", { class: "composer-files" });
+  const caption = h("div", { class: "cap-line", "aria-live": "polite" });
   const sendBtn = h("button", { class: "send-btn", type: "button" });
   const fileInput = h("input", { type: "file", multiple: true, hidden: true, accept: ACCEPT });
   let reading = 0;
@@ -1053,7 +1074,8 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onH
     tierSeg.dataset.tier = config.tier;
     for (const b of hubSwitch.querySelectorAll<HTMLElement>(".hub-opt")) b.setAttribute("aria-checked", String(b.dataset.hub === hub));
     for (const b of tierSeg.querySelectorAll<HTMLElement>(".tier-opt")) b.setAttribute("aria-checked", String(b.dataset.tier === config.tier));
-    input.placeholder = hub === "focus" ? `Ask ${fa ? fa.name || "your agent" : TIERS[config.tier].name}…` : "Message your team…";
+    void typePlaceholder(input, hub === "focus" ? `Ask ${fa ? fa.name || "your agent" : TIERS[config.tier].name}…` : "Message your team…");
+    void handWrite(caption, captionFor(ctx, config, hub, fa));
     opts.replaceChildren(
       ...(hub === "focus"
         ? fa
@@ -1243,7 +1265,7 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onH
   renderBar();
   sync();
   renderFiles();
-  const composer = h("div", { class: "composer" }, files, input, bar, fileInput);
+  const composer = h("div", { class: "composer" }, files, input, caption, bar, fileInput);
   composer.addEventListener("dragover", (e) => {
     e.preventDefault();
     composer.classList.add("drop");

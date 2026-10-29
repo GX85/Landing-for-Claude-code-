@@ -21,6 +21,8 @@ let info: AuthInfo | undefined;
 export async function authInfo(): Promise<AuthInfo> {
   if (info) return info;
   try {
+    // an Artifact has no server of its own, so there is nothing to ask
+    if (import.meta.env.VITE_ARTIFACT === "1") throw new Error("artifact");
     const res = await fetch("/api/auth?a=me", { cache: "no-store" });
     info = res.ok ? ((await res.json()) as AuthInfo) : undefined;
   } catch {

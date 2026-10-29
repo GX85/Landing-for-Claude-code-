@@ -1371,3 +1371,42 @@ html.dark .app-root .md code {
     contain: content;
   }
 }
+
+/* the line under the message box that is written out when you switch model, thinking level or hub */
+.cap-line {
+  min-height: 18px;
+  padding: 0 4px 4px;
+  overflow: hidden;
+  color: var(--ink-3);
+  font-size: 12.5px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: opacity 0.16s ease;
+}
+.cap-line.tw-out {
+  opacity: 0;
+}
+.cap-line.tw-typing::after {
+  content: "";
+  display: inline-block;
+  width: 1.5px;
+  height: 0.95em;
+  margin-left: 2px;
+  background: hsl(var(--h) 95% 60%);
+  vertical-align: -0.12em;
+  animation: blink 0.9s steps(2) infinite;
+}
+
+/* a code block that is still arriving is plain text until it is finished */
+.stream-code {
+  margin: 10px 0;
+  padding: 12px 14px;
+  max-height: 260px;
+  overflow: auto;
+  border-radius: 12px;
+  background: rgba(127, 127, 127, 0.12);
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
