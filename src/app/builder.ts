@@ -8,6 +8,8 @@
  */
 
 import type { ChatTurn } from "./api";
+import { closestGame, exampleGameJs, renderCustomGame, renderGame, type GameConfig } from "./templates/games";
+import { themeNames } from "./templates/kit";
 
 export type BuildKind = "presentation" | "game" | "website" | "app";
 
@@ -151,6 +153,7 @@ export async function runBuild(kind: BuildKind, messages: ChatTurn[], call: Buil
   const what = LABEL[kind][ru ? 1 : 0];
   const say = (en: string, rus: string) => (ru ? rus : en);
   if (kind === "presentation") return buildDeck(messages, call, onText, ru);
+  if (kind === "game") return buildGame(messages, call, onText, signal, ru);
 
   const system = `${BUILD_SYSTEM}\n\n${KIND_RULES[kind]}`;
   const status = (line: string, body = "") => onText(`*${line}*${body ? `\n\n${body}` : ""}`);
@@ -375,4 +378,95 @@ ${slides}
 })();
 </script>
 </body></html>`;
+}
+
+/* ---------- games: the model writes the game, the engine runs it ---------- */
+
+const ENGINE_DOC = `You write browser games for the Focus game engine. The engine is already written and tested: it gives you a full-screen canvas scaled for the screen, the game loop, start and game-over screens, score and best-score display, pause when the tab is hidden, keyboard/touch dispatch, particles and screen shake. You write ONLY the game itself.
+
+Write ONE JavaScript function expression: function(api){ ...your game...; return { reset, update, draw, key, swipe, tap, down, move, up, resize } }
+(only reset, update and draw are required).
+
+api:
+- api.W(), api.H(): canvas size in CSS pixels (changes on resize)
+- api.c: colours from the theme {a, b, fg, muted, bg, bg2} (CSS colour strings)
+- api.add(n), api.set(n), api.score: the score
+- api.end(won): call ONCE when the round is over (won = true for a win)
+- api.burst(x, y, color, count): particle explosion; api.shake(px): screen shake
+- api.rnd(n): random integer 0..n-1; api.diff: 0.8 / 1 / 1.3 difficulty multiplier
+Your methods:
+- reset(): set up a fresh round (called before every round and once at load)
+- update(dt): dt in seconds (≤ 0.05); called only while playing
+- draw(g, t): g is a ready CanvasRenderingContext2D; clear and draw the whole frame; t in seconds. Also called on menus, so never assume update ran.
+- key(k, down): k is e.key, letters lower-case ("ArrowLeft", " ", "w"); down is true/false
+- swipe(dir): "left" | "right" | "up" | "down"; tap(x, y); down(x, y); move(x, y, pressed); up(x, y); resize(w, h)
+For 3D: return { webgl: true, ... }, create new THREE.WebGLRenderer({canvas: document.getElementById("c")}) yourself (three.js r128 is loaded as the global THREE; no add-ons) and render in draw().
+
+Rules: plain JavaScript inside that one function; no modules, imports, DOM building, alert or external files. Declare every variable. Make it fun: clear goal, rising difficulty, juicy feedback (bursts, shake), and good-looking shapes using api.c colours.
+
+Reply in exactly this format:
+1. A \`\`\`json block: {"title": string, "subtitle": string, "theme": one of ${"${THEMES}"}, "pad": "dpad" | "lr" | "tetris" | "none", "controls": string, "lang": two-letter code, "text": {"start","restart","score","best","gameOver","win"}}
+   pad = the on-screen buttons phones get (they send key("ArrowLeft"...) and key(" ")); "none" for tap/swipe/drag games. All text in the user's language.
+2. A \`\`\`js block with the function.
+Nothing else.`;
+
+function parseGameReply(text: string): { cfg: Partial<GameConfig>; js: string } | null {
+  const clean = text.replace(/<think>[\s\S]*?<\/think>/g, "");
+  const jsonBlock = /```json\s*\n([\s\S]*?)```/i.exec(clean)?.[1];
+  const jsBlock = /```(?:js|javascript)\s*\n([\s\S]*?)(```|$)/i.exec(clean)?.[1];
+  if (!jsBlock) return null;
+  let cfg: Partial<GameConfig> = {};
+  if (jsonBlock) {
+    try {
+      cfg = JSON.parse(jsonBlock.replace(/,\s*([}\]])/g, "$1")) as Partial<GameConfig>;
+    } catch {
+      // the game still runs with default texts
+    }
+  }
+  // accept "function(api){…}" with or without a trailing semicolon or a wrapping assignment
+  let js = jsBlock.trim().replace(/;\s*$/, "");
+  const start = js.search(/function\s*\(\s*api\s*\)/);
+  if (start < 0) return null;
+  js = js.slice(start);
+  return { cfg, js };
+}
+
+async function buildGame(messages: ChatTurn[], call: BuildCall, onText: (full: string) => void, signal: AbortSignal, ru: boolean): Promise<string> {
+  const say = (en: string, rus: string) => (ru ? rus : en);
+  const ask = messages.at(-1)?.content ?? "";
+  const closest = closestGame(ask);
+  const system = `${ENGINE_DOC.replace("${THEMES}", themeNames.join(", "))}\n\nHere is a complete, working example game for this engine. Use it to see how the API is used; write your own game for the user's request, not a copy:\n\`\`\`js\n${exampleGameJs(closest)}\n\`\`\``;
+  const status = (en: string, rus: string, body = "") => onText(`*${say(en, rus)}*${body ? `\n\n${body}` : ""}`);
+
+  status("Designing your game…", "Придумываю игру…");
+  let reply = await call(system, messages, (t) => status("Writing your game…", "Пишу игру…", t), 16000);
+  let parsed = parseGameReply(reply.text);
+  let cfg: GameConfig = { lang: ru ? "ru" : "en", ...(parsed?.cfg ?? {}), template: "custom" };
+  let html = parsed ? renderCustomGame(cfg, parsed.js) : "";
+  let errors = html ? await validateHtml(html, 3600) : ["No game code came back."];
+
+  for (let round = 0; round < 2 && errors.length && !signal.aborted; round++) {
+    status(`Testing found ${errors.length} problem${errors.length > 1 ? "s" : ""}, fixing…`, `При тесте нашёл ошибки (${errors.length}), исправляю…`);
+    const previous = parsed ? "```json\n" + JSON.stringify(cfg) + "\n```\n```js\n" + parsed.js + "\n```" : reply.text.slice(0, 6000);
+    reply = await call(
+      system,
+      [...messages, { role: "assistant", content: previous }, { role: "user", content: `I ran it in the engine and got:\n${errors.map((e) => `- ${e}`).join("\n")}\n\nFind the cause and fix it. Reply again in the exact format: the json block, then the complete fixed js function.` }],
+      (t) => status("Fixing…", "Исправляю…", t),
+      16000,
+    );
+    const next = parseGameReply(reply.text);
+    if (next) {
+      parsed = next;
+      cfg = { ...cfg, ...next.cfg, template: "custom" };
+      html = renderCustomGame(cfg, next.js);
+      errors = await validateHtml(html, 3600);
+    }
+  }
+
+  if (!errors.length && html) {
+    return `${say("Here's your game", "Вот твоя игра")}: **${cfg.title ?? say("Game", "Игра")}**. ${say("I wrote it for your request and tested it: it runs without errors.", "Написал её под твой запрос и проверил: запускается без ошибок.")} ${say("Tap **Full screen** to play, or tell me what to change.", "Жми **Full screen**, чтобы играть, или скажи, что поменять.")}\n\n\`\`\`html\n<!-- focus:preview kind=game -->\n${html}\n\`\`\``;
+  }
+  // the model's own version wouldn't run: hand over the closest polished game, themed to the request
+  const fallback = renderGame({ ...cfg, template: closest });
+  return `${say("My own version of this game kept crashing in testing, so here's a polished, tested", "Моя версия игры под этот запрос падала при тестах, поэтому вот готовая проверенная игра в стиле запроса:")} **${cfg.title ?? closest}**${say(" in the same spirit.", ".")} ${say("Ask again and I'll try writing it from scratch once more.", "Попроси ещё раз, и я снова попробую написать её с нуля.")}\n\n\`\`\`html\n<!-- focus:preview kind=game -->\n${fallback}\n\`\`\``;
 }

@@ -27,7 +27,8 @@ export function focusMark(size = 64): SVGSVGElement {
       else if (t === 0) (o = 0.68), (cls = "px");
       else if (t === 1) (o = 0.9), (cls = "px");
       else o = 1;
-      const delay = cls ? `style="animation-delay:${(x * 130) % 1200}ms" ` : "";
+      // the wave runs down the diagonal: each cell starts a little after the one above-right of it
+      const delay = cls ? `style="--o:${o};animation-delay:${(N - 1 - x) * 85 + (t + 1) * 40}ms" ` : "";
       cells += `<rect ${cls ? `class="${cls}" ` : ""}${delay}x="${(x + gap / 2).toFixed(3)}" y="${(y + gap / 2).toFixed(3)}" width="${(1 - gap).toFixed(3)}" height="${(1 - gap).toFixed(3)}" rx="0.14" opacity="${o}"/>`;
     }
   }

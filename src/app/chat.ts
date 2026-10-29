@@ -121,7 +121,7 @@ export function renderChat(main: HTMLElement, ctx: Ctx, chat: Chat | undefined):
     };
     onHubChange = () => paint(true);
     paint(false);
-    main.replaceChildren(head, h("div", { class: "hello" }, h("div", { class: "hello-logo", "aria-hidden": "true" }, focusMark(76)), title, composer, sugg));
+    main.replaceChildren(head, h("div", { class: "hello" }, h("div", { class: "hello-logo", "aria-hidden": "true" }, waveMark(76)), title, composer, sugg));
     return;
   }
 
@@ -251,6 +251,20 @@ function tierAgent(ctx: Ctx, tier: Tier, think = 0): Agent {
 }
 
 /* ---------- thinking ---------- */
+
+/** The Focus mark with its wave running. */
+function waveMark(size: number): SVGSVGElement {
+  const mark = focusMark(size);
+  mark.classList.add("wave");
+  return mark;
+}
+
+/** The small waving logo shown while an answer is on its way. */
+function thinkMark(): SVGSVGElement {
+  const mark = waveMark(17);
+  mark.classList.add("think-mark");
+  return mark;
+}
 
 /** What Focus is "doing" while the first words are on their way. Half true, half not. */
 const THINKING = [
@@ -390,7 +404,7 @@ function stepEl(step: StepRecord, compact: boolean): HTMLElement {
     h(
       "div",
       { class: "step-head" },
-      step.status === "running" ? h("span", { class: "spinner sm" }) : agentAvatar("sm", step, step.provider),
+      step.status === "running" ? thinkMark() : agentAvatar("sm", step, step.provider),
       h("span", { class: "step-who" }, step.agentName),
       h("span", { class: "step-phase" }, step.phase),
       h("span", { class: "step-time" }, step.status === "error" ? "failed" : stepTime(step)),
@@ -459,7 +473,7 @@ function fillAssistant(ctx: Ctx, chat: Chat, m: Message, el: HTMLElement): void 
   const parts: (Node | null)[] = [head];
   const isSolo = m.mode === "solo";
   const isCompare = m.mode === "compare";
-  if (running && !steps.length) parts.push(h("p", { class: "step-wait" }, h("span", { class: "spinner sm" }), " ", thinkingLabel()));
+  if (running && !steps.length) parts.push(h("p", { class: "step-wait" }, thinkMark(), " ", thinkingLabel()));
 
   if (!isSolo && !isCompare && steps.length) {
     const active = steps.filter((s) => s.status === "running");
@@ -471,7 +485,7 @@ function fillAssistant(ctx: Ctx, chat: Chat, m: Message, el: HTMLElement): void 
       h(
         "summary",
         {},
-        running ? h("span", { class: "spinner sm" }) : icon("check", 15),
+        running ? thinkMark() : icon("check", 15),
         h(
           "span",
           {},
@@ -505,7 +519,7 @@ function fillAssistant(ctx: Ctx, chat: Chat, m: Message, el: HTMLElement): void 
       ),
     );
   } else if (isSolo && running && steps[0]) {
-    parts.push(steps[0].text ? markdownEl(steps[0].text, "md answer streaming") : h("p", { class: "step-wait" }, h("span", { class: "spinner sm" }), " ", steps[0].progress ?? thinkingLabel()));
+    parts.push(steps[0].text ? markdownEl(steps[0].text, "md answer streaming") : h("p", { class: "step-wait" }, thinkMark(), " ", steps[0].progress ?? thinkingLabel()));
   } else if (final) {
     if (m.note) parts.push(h("p", { class: "note" }, m.note));
     parts.push(markdownEl(final.text, "md answer"), mediaEl(final.media, `Result from ${final.agentName}`));
@@ -913,7 +927,7 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onH
   const thinkMenu = () => {
     const hint = h("p", { class: "think-hint" }, THINK[config.think ?? 0].hint);
     const range = h("input", { type: "range", min: 0, max: THINK.length - 1, step: 1, value: String(config.think ?? 0), class: "think-range", "aria-label": "Thinking level" });
-    const marks = h("div", { class: "think-marks" }, ...THINK.map((t, i) => h("button", { type: "button", "data-i": String(i), onclick: () => set(i) }, t.name)));
+    const marks = h("div", { class: "think-marks" }, ...THINK.map((t, i) => h("button", { type: "button", "data-i": String(i), onclick: () => set(i) }, t.short ?? t.name)));
     const set = (i: number) => {
       config.think = i;
       range.value = String(i);

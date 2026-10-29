@@ -39,9 +39,26 @@
   filter: drop-shadow(0 6px 16px var(--glow));
 }
 
-/* the diagonal shimmers once when the hub changes, not all the time */
+/* the diagonal is a living wave: a pulse of light rolls down it, over and over */
+.focus-mark .px {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.focus-mark.wave .px,
 .focus-mark.burst .px {
-  animation: px-flicker 0.9s ease-in-out 2;
+  animation: px-wave 1.7s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+@keyframes px-wave {
+  0%,
+  55%,
+  100% {
+    opacity: var(--o, 0.6);
+    transform: none;
+  }
+  22% {
+    opacity: 1;
+    transform: scale(1.22);
+  }
 }
 
 @keyframes px-flicker {
@@ -877,6 +894,48 @@ html.dark .app-root .md code {
     background: #1b1b20;
   }
   .hello-logo::before {
+    animation: none;
+  }
+}
+
+/* the five stops sit in five equal columns, so big system fonts can't push them out */
+.think-marks {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin: 0 -4px;
+}
+.think-marks button {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+  font-size: 12px;
+}
+.think-marks button:first-child {
+  text-align: left;
+}
+.think-marks button:last-child {
+  text-align: right;
+}
+.think-menu {
+  overflow: hidden;
+}
+.think-hint {
+  overflow-wrap: anywhere;
+}
+
+/* the thinking indicator is the logo itself */
+.think-mark {
+  display: inline-block;
+  flex: none;
+  vertical-align: -3px;
+  margin-right: 2px;
+  filter: drop-shadow(0 0 6px var(--glow));
+}
+@media (prefers-reduced-motion: reduce) {
+  .focus-mark.wave .px,
+  .focus-mark.burst .px {
     animation: none;
   }
 }
