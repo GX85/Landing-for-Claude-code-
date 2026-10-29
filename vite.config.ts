@@ -13,7 +13,7 @@ function devApi(): Plugin {
         res.on("close", () => abort.abort());
         try {
           const mod = await server.ssrLoadModule(`/api/${match[1]}.ts`);
-          const request = new Request(new URL(req.url!, "http://localhost"), {
+          const request = new Request(new URL(req.url!, `http://${req.headers.host ?? "localhost"}`), {
             method: req.method,
             headers: req.headers as Record<string, string>,
             body: req.method === "GET" || req.method === "HEAD" ? undefined : (Readable.toWeb(req) as ReadableStream),

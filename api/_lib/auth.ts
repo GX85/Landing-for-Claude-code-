@@ -90,8 +90,48 @@ const sameKey = (given: string) => {
   return timingSafeEqual(a, b);
 };
 
+/* ---------- abuse guards ---------- */
+
+const clientIp = (request: Request) => (request.headers.get("x-forwarded-for")?.split(",")[0] ?? request.headers.get("x-real-ip") ?? "unknown").trim();
+
+/** Wrong guesses per address, kept while this server instance lives: enough to slow a script that keeps hitting one instance. */
+const misses = new Map<string, { n: number; until: number; last: number }>();
+
+function guessState(ip: string) {
+  const now = Date.now();
+  const m = misses.get(ip);
+  if (m && now - m.last > 15 * 60_000) misses.delete(ip);
+  return misses.get(ip);
+}
+
+const noteMiss = (ip: string) => {
+  const now = Date.now();
+  const m = guessState(ip) ?? { n: 0, until: 0, last: now };
+  m.n += 1;
+  m.last = now;
+  // five wrong keys in a row lock that address for 15 minutes
+  if (m.n >= 5) m.until = now + 15 * 60_000;
+  misses.set(ip, m);
+  if (misses.size > 5000) misses.clear();
+  return m;
+};
+
+/** A write from another website is refused: the page that calls the API must be this site. */
+export function sameSite(request: Request): Response | undefined {
+  const origin = request.headers.get("origin");
+  if (!origin || request.method === "GET" || request.method === "OPTIONS") return;
+  try {
+    if (new URL(origin).host === new URL(request.url).host) return;
+  } catch {
+    // fall through to the refusal
+  }
+  return new Response(JSON.stringify({ error: "Requests from other sites aren't allowed." }), { status: 403, headers: { "content-type": "application/json" } });
+}
+
 /** Throws a 401 response when the access key hasn't been entered, or when sign-in is on and the request has no session. */
 export function requireUser(request: Request): Response | undefined {
+  const foreign = sameSite(request);
+  if (foreign) return foreign;
   if (!hasAccess(request)) return new Response(JSON.stringify({ error: "Access key required." }), { status: 401, headers: { "content-type": "application/json" } });
   if (!authEnabled() || currentUser(request)) return;
   return new Response(JSON.stringify({ error: "Sign in to use Focus." }), { status: 401, headers: { "content-type": "application/json" } });
@@ -228,10 +268,16 @@ export async function handleAuth(request: Request): Promise<Response> {
   if (a === "key") {
     if (request.method !== "POST") return json({ error: "Use POST." }, 405);
     if (!accessRequired()) return json({ ok: true });
+    const foreign = sameSite(request);
+    if (foreign) return foreign;
+    const ip = clientIp(request);
+    const state = guessState(ip);
+    if (state && state.until > Date.now()) return json({ error: "Too many wrong keys. Try again in a few minutes." }, 429);
     const body = (await request.json().catch(() => ({}))) as { key?: string };
     if (!sameKey(String(body.key ?? ""))) {
-      // a short pause makes guessing slow
-      await new Promise((r) => setTimeout(r, 900));
+      // every wrong key makes the next answer slower
+      const m = noteMiss(ip);
+      await new Promise((r) => setTimeout(r, Math.min(900 * m.n, 4000)));
       return json({ error: "That key isn't right." }, 401);
     }
     return json({ ok: true }, 200, cookie(request, ACCESS, sign({ ok: true, exp: Date.now() + SESSION_DAYS * 864e5 }), SESSION_DAYS * 86400));
