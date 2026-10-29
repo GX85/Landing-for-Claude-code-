@@ -23,6 +23,12 @@
       as="image"
       href="https://d2ol7oe51mr4n9.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/726b168c-da47-4682-a255-cc3e02f89bae.jpg"
     />
+    <style>
+      /* painted before anything else loads, so there is never a white flash */
+      html { background: #08080a; color-scheme: dark; }
+      html.light { background: #f2f2f1; color-scheme: light; }
+      body { margin: 0; background: inherit; }
+    </style>
     <script>
       try { document.documentElement.classList.add(localStorage.getItem("focus.theme") === "light" ? "light" : "dark"); } catch { document.documentElement.classList.add("dark"); }
     </script>

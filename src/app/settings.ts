@@ -1,9 +1,10 @@
 import type { Ctx } from "./app";
+import { setToolsConfig } from "./tools";
 import { h, pageHead, slideSeg } from "./dom";
 import { getLang, setLang, type Lang } from "../i18n";
 import { openRouterCatalog, resetCatalog } from "./pages";
 import { liveModelsAt, refreshLiveModels } from "./api";
-import type { ModelChoice, ModelSource } from "./store";
+import { allSkills, uid, type ModelChoice, type ModelSource, type Skill } from "./store";
 
 /** Settings: which model answers in Focus and which in Aeronus. */
 
@@ -130,6 +131,107 @@ function section(ctx: Ctx, key: "focus" | "aeronus", title: string, lede: string
   return h("section", { class: "card set-card" }, h("h3", { class: "set-title" }, title), h("p", { class: "page-lede set-lede" }, lede), seg, hint, body);
 }
 
+
+/* ---------- internet, device and skills ---------- */
+
+const sw = (on: boolean, label: string, onChange: (on: boolean) => void): HTMLButtonElement => {
+  const b = h("button", { class: "switch", type: "button", role: "switch", "aria-checked": String(on), "aria-label": label });
+  b.addEventListener("click", () => {
+    const next = b.getAttribute("aria-checked") !== "true";
+    b.setAttribute("aria-checked", String(next));
+    onChange(next);
+  });
+  return b;
+};
+
+const row = (title: string, hint: string, control: Node): HTMLElement =>
+  h("div", { class: "set-row" }, h("div", { class: "set-row-text" }, h("strong", {}, title), h("small", {}, hint)), control);
+
+function toolsSection(ctx: Ctx): HTMLElement {
+  const t = ctx.state.settings.tools;
+  const save = () => {
+    ctx.persist();
+    setToolsConfig(t);
+  };
+  const status = h("p", { class: "field-hint set-hint", role: "status" });
+  const url = h("input", { type: "text", value: t.bridge.url, placeholder: "http://127.0.0.1:7788", "aria-label": "Device address", autocapitalize: "off", spellcheck: "false" });
+  const key = h("input", { type: "password", value: t.bridge.token, placeholder: "Device key", "aria-label": "Device key", autocomplete: "off" });
+  url.addEventListener("input", () => ((t.bridge.url = url.value.trim()), save()));
+  key.addEventListener("input", () => ((t.bridge.token = key.value.trim()), save()));
+  const test = h("button", { class: "btn-ghost sm", type: "button" }, "Test the connection");
+  test.addEventListener("click", async () => {
+    status.textContent = "Connecting…";
+    try {
+      const res = await fetch(`${t.bridge.url.replace(/\/$/, "")}/ping`, { headers: { "x-focus-token": t.bridge.token } });
+      const d = (await res.json()) as { ok?: boolean; root?: string; shell?: boolean; error?: string };
+      status.textContent = d.ok ? `Connected. Focus may use ${d.root}${d.shell ? " and run commands" : " (read only)"}.` : d.error || "The key isn't right.";
+    } catch {
+      status.textContent = "Can't reach it. Is the program running on that device?";
+    }
+  });
+  const steps = h(
+    "details",
+    { class: "set-steps" },
+    h("summary", {}, "How to connect a computer or a phone"),
+    h("p", {}, "1. Install Node.js (nodejs.org). On Android install the Termux app, then run: pkg install nodejs"),
+    h("p", {}, "2. Download the small program: ", h("a", { href: "/focus-bridge.mjs", download: "focus-bridge.mjs" }, "focus-bridge.mjs")),
+    h("p", {}, "3. Run it: node focus-bridge.mjs   (add --root ~/Documents to limit it to one folder, and --shell to let Focus run commands)"),
+    h("p", {}, "4. Paste the address and key it prints here, then switch the connection on. It only listens on that device."),
+  );
+  return h(
+    "section",
+    { class: "card set-card" },
+    h("h3", { class: "set-title" }, "Internet and devices"),
+    h("p", { class: "page-lede set-lede" }, "What Focus may use while it answers. It asks a tool only when the question needs it."),
+    ...(import.meta.env.VITE_ARTIFACT === "1" ? [h("p", { class: "field-hint set-hint" }, "The internet and device tools work in the full app at focus-agents.vercel.app; this Artifact has no server for them.")] : []),
+    row("Internet", "Search the web and read pages, then answer with sources.", sw(t.web, "Internet access", (on) => ((t.web = on), save()))),
+    row("My location", "Use the position of this device (the browser asks you).", sw(t.location, "Location", (on) => ((t.location = on), save()))),
+    row("Computer or phone", "Look through a folder on a device and find what's needed.", sw(t.bridge.on, "Device connection", (on) => ((t.bridge.on = on), save()))),
+    h("div", { class: "set-body" }, url, key),
+    row("Allow commands", "Focus may run commands there; you approve each one.", sw(t.bridge.shell, "Allow commands", (on) => ((t.bridge.shell = on), save()))),
+    h("div", { class: "set-actions" }, test),
+    status,
+    steps,
+  );
+}
+
+function skillsSection(ctx: Ctx, rerender: () => void): HTMLElement {
+  const st = ctx.state;
+  const on = (id: string) => st.settings.skills.includes(id);
+  const flip = (id: string, v: boolean) => {
+    st.settings.skills = v ? [...new Set([...st.settings.skills, id])] : st.settings.skills.filter((x) => x !== id);
+    ctx.persist();
+  };
+  const card = (k: Skill): HTMLElement => {
+    const body = h("div", { class: "set-skill-body" });
+    if (!k.builtIn) {
+      const name = h("input", { type: "text", value: k.name, placeholder: "Name", "aria-label": "Skill name" });
+      const desc = h("input", { type: "text", value: k.description, placeholder: "Short description", "aria-label": "Skill description" });
+      const text = h("textarea", { rows: 4, placeholder: "What Focus should always do when this skill is on.", "aria-label": "Skill instructions" });
+      text.value = k.instructions;
+      name.addEventListener("input", () => ((k.name = name.value), ctx.persist()));
+      desc.addEventListener("input", () => ((k.description = desc.value), ctx.persist()));
+      text.addEventListener("input", () => ((k.instructions = text.value), ctx.persist()));
+      body.append(name, desc, text, h("button", { class: "btn-ghost sm danger", type: "button", onclick: () => ((st.skills = st.skills.filter((x) => x.id !== k.id)), (st.settings.skills = st.settings.skills.filter((x) => x !== k.id)), ctx.persist(), rerender()) }, "Delete"));
+    } else body.append(h("p", { class: "field-hint" }, k.description));
+    return h("details", { class: "set-skill" }, h("summary", {}, h("span", { class: "set-skill-name" }, k.name || "Untitled skill"), sw(on(k.id), `${k.name} in every chat`, (v) => flip(k.id, v))), body);
+  };
+  const add = h("button", { class: "btn sm", type: "button" }, "New skill");
+  add.addEventListener("click", () => {
+    st.skills.push({ id: uid(), name: "", description: "", instructions: "" });
+    ctx.persist();
+    rerender();
+  });
+  return h(
+    "section",
+    { class: "card set-card" },
+    h("h3", { class: "set-title" }, "Skills"),
+    h("p", { class: "page-lede set-lede" }, "Short sets of instructions. Switch a skill on and Focus follows it in every chat. Open one to read it; write your own below."),
+    ...allSkills(st).map(card),
+    add,
+  );
+}
+
 export function renderSettings(main: HTMLElement, ctx: Ctx): void {
   const rerender = () => renderSettings(main, ctx);
   const inArtifact = import.meta.env.VITE_ARTIFACT === "1";
@@ -154,6 +256,8 @@ export function renderSettings(main: HTMLElement, ctx: Ctx): void {
           h("button", { class: "btn", type: "button", onclick: () => void updateModels(rerender) }, "Update models"),
           h("span", { class: "field-hint" }, updateNote || (liveModelsAt() ? "Lists are up to date." : "Focus keeps its model lists fresh: retired models drop out and new free ones join.")),
         ),
+        toolsSection(ctx),
+        skillsSection(ctx, rerender),
         section(ctx, "focus", "Focus chat", "The single assistant (Storm, GEN, Clorus) answers with this model.", rerender),
         section(ctx, "aeronus", "Aeronus chat", "Every team member that runs on Focus's free connection answers with this model. Agents with their own key keep theirs.", rerender),
       ),

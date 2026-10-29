@@ -1715,3 +1715,83 @@ html.dark .app-root .md code {
 .plus-menu {
   min-width: min(300px, calc(100vw - 48px));
 }
+
+/* ---------- settings: switches, skills, device steps ---------- */
+.set-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 0;
+}
+.set-row + .set-row,
+.set-body + .set-row {
+  border-top: 1px solid var(--line);
+}
+.set-row-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.set-row-text strong {
+  font-size: 14.5px;
+}
+.set-row-text small {
+  color: var(--ink-3);
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+.set-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+.set-steps {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+  font-size: 13px;
+}
+.set-steps summary {
+  cursor: pointer;
+  font-weight: 650;
+}
+.set-steps p {
+  margin: 8px 0 0;
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+.set-skill {
+  border-top: 1px solid var(--line);
+}
+.set-skill summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  cursor: pointer;
+  list-style: none;
+}
+.set-skill summary::-webkit-details-marker {
+  display: none;
+}
+.set-skill-name {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 14.5px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.set-skill-body {
+  display: grid;
+  gap: 8px;
+  padding: 0 0 12px;
+}
+.set-skill-body input,
+.set-skill-body textarea,
+.set-body input {
+  width: 100%;
+}

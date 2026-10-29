@@ -8,6 +8,7 @@ import { modeInfo, MODES, startRun } from "./modes";
 import { click, setSound } from "./sound";
 import { agentAvatar, applyHub, focusMark } from "./brand";
 import { agentMascot } from "../mascot";
+import { setToolsConfig } from "./tools";
 import { typeInto as handWrite, typePlaceholder } from "./typing";
 import { allSkills, choiceModel, connectionOf, isReady, KIND_LABEL, missing, newConnection, PERSONA, PROVIDERS, TIER_ORDER, TIERS, uid, type Agent, type Attachment, type Chat, type ChatConfig, type CreateKind, type FocusAgent, type Hub, type Message, type StepRecord, type Tier } from "./store";
 
@@ -323,7 +324,9 @@ function tierAgent(ctx: Ctx, tier: Tier, think = 0): Agent {
     ctx.persist();
   }
   const t = TIERS[tier];
-  return { id: `tier-${tier}`, name: t.name, connectionId: conn.id, kind: "chat", model: `tier:${tier}:${think}`, effort: "", role: `${PERSONA}\n\n${t.role}`, color: TIER_COLORS[tier], enabled: true, skills: [], avatar: "", prefer: choiceModel(ctx.state.settings.focus) };
+  // skills switched on in Settings apply to every Focus chat
+  const global = allSkills(ctx.state).filter((k) => ctx.state.settings.skills.includes(k.id) && k.instructions.trim()).map((k) => `Skill — ${k.name}: ${k.instructions.trim()}`);
+  return { id: `tier-${tier}`, name: t.name, connectionId: conn.id, kind: "chat", model: `tier:${tier}:${think}`, effort: "", role: [`${PERSONA}\n\n${t.role}`, ...global].join("\n\n"), color: TIER_COLORS[tier], enabled: true, skills: [], avatar: "", prefer: choiceModel(ctx.state.settings.focus) };
 }
 
 /* ---------- thinking ---------- */
@@ -731,6 +734,7 @@ async function runTurn(ctx: Ctx, chat: Chat, userMsg: Message): Promise<void> {
   // Focus: one assistant per tier. Aeronus (and chats from before hubs existed): the whole team.
   const focusHub = chat.config.hub === "focus";
   const built = focusHub ? focusAgentOf(ctx, chat.config) : undefined;
+  setToolsConfig(ctx.state.settings.tools);
   const create = userMsg.create;
   // pictures and video go to a generator; games, decks, sites and apps force the Builder on the chat model
   const media = create === "image" || create === "video" ? generatorAgent(ctx, create) : undefined;

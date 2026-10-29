@@ -1,4 +1,5 @@
 import { getLang } from "../i18n";
+import { intentHint, looksLikeTool, parseToolCall, runTool, toolNote, toolsOn, toolsPrompt, type Source } from "./tools";
 import { detectBuild, runBuild, type BuildCall, type BuildKind } from "./builder";
 import { PROVIDERS, TIERS, type Agent, type AgentKind, type Connection, type Tier } from "./store";
 
@@ -400,10 +401,35 @@ async function callTier(spec: string, agent: Agent, conn: Connection, system: st
   // an agent built in Focus tries the model its owner picked before anything else
   const first = preferred(agent);
   if (first) models = [first, ...models.filter((m) => m !== first)];
-  const r = await chainCall(models, { ...agent, effort: level.effort }, conn, `${system}\n\n${level.note}`, messages, signal, onText, {
-    maxTokens: level.maxTokens,
-    firstTokenMs: level.firstTokenMs,
-  });
+  const opts = { maxTokens: level.maxTokens, firstTokenMs: level.firstTokenMs };
+
+  // with tools on, the model may ask for a search, a page or a file; the result goes back and it answers
+  if (toolsOn() && !sees) {
+    const sys = `${system}\n\n${level.note}\n\n${toolsPrompt()}${intentHint(messages.at(-1)?.content ?? "")}`;
+    let msgs = messages;
+    const sources: Source[] = [];
+    const used = new Set<string>();
+    for (let round = 0; ; round++) {
+      const r = await chainCall(models, { ...agent, effort: level.effort }, conn, sys, msgs, signal, (t) => {
+        if (!looksLikeTool(t)) onText(t);
+      }, { ...opts, maxTokens: Math.max(level.maxTokens ?? 0, 1500) });
+      const call = round < 5 ? parseToolCall(r.text) : null;
+      const key = call ? JSON.stringify(call) : "";
+      if (!call || used.has(key)) {
+        const answer = r.text.replace(/```tool[\s\S]*?```/g, "").trim();
+        const list = [...new Map(sources.map((x) => [x.url, x])).values()].slice(0, 5);
+        const cites = list.length ? `\n\n**${getLang() === "ru" ? "Источники" : "Sources"}**\n${list.map((x) => `- [${x.title.replace(/[\[\]]/g, "")}](${x.url})`).join("\n")}` : "";
+        return { ...r, text: answer + cites, model: `${shortModel(r.used)} · ${level.name}${round ? ` · ${round} ${getLang() === "ru" ? "шаг(а) с инструментами" : round === 1 ? "tool step" : "tool steps"}` : ""}` };
+      }
+      used.add(key);
+      onText(`*${toolNote(call)}*`);
+      const out = await runTool(call, signal);
+      sources.push(...out.sources);
+      msgs = [...msgs, { role: "assistant", content: r.text }, { role: "user", content: `[tool result: ${call.tool}]\n${out.text}\n\nThis is fresh information from outside, newer than what you remember: trust it over your memory. Answer the user with it now, in the user's own language (name the source). If it doesn\'t contain the answer, say so plainly, or call one more tool with a better query.` }];
+    }
+  }
+
+  const r = await chainCall(models, { ...agent, effort: level.effort }, conn, `${system}\n\n${level.note}`, messages, signal, onText, opts);
   return { ...r, model: `${shortModel(r.used)} · ${level.name}` };
 }
 

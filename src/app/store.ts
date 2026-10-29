@@ -1,3 +1,4 @@
+import { defaultTools, type ToolsConfig } from "./tools";
 export type Provider =
   | "focus"
   | "anthropic"
@@ -340,7 +341,7 @@ export interface State {
   /** Agents the user built in Focus. */
   focusAgents: FocusAgent[];
   /** Which model answers in each hub; "auto" leaves it to Focus. */
-  settings: { focus: ModelChoice; aeronus: ModelChoice };
+  settings: { focus: ModelChoice; aeronus: ModelChoice; /** Skill ids switched on for every Focus chat. */ skills: string[]; tools: ToolsConfig };
   version?: number;
 }
 
@@ -351,7 +352,7 @@ export interface ModelChoice {
   model: string;
 }
 
-export const defaultSettings = (): State["settings"] => ({ focus: { source: "auto", model: "" }, aeronus: { source: "auto", model: "" } });
+export const defaultSettings = (): State["settings"] => ({ focus: { source: "auto", model: "" }, aeronus: { source: "auto", model: "" }, skills: [], tools: defaultTools() });
 
 /** The model string the chat runner understands for a choice, or undefined to let Focus decide. */
 export const choiceModel = (c: ModelChoice | undefined): string | undefined => (c && c.source !== "auto" && c.model ? `${c.source}/${c.model}` : undefined);
@@ -856,7 +857,7 @@ export function newAgent(connection: Connection, kind?: AgentKind): Agent {
   };
 }
 
-const STATE_VERSION = 7;
+const STATE_VERSION = 8;
 
 /** The Aeronus team out of the box: every one needs the user's own key. */
 const TEAM_PROVIDERS: Provider[] = ["anthropic", "openai", "gemini", "xai", "mistral", "qwen", "devin", "manus", "jules", "higgsfield", "luma", "replicate"];
@@ -928,6 +929,9 @@ function upgrade(state: State): State {
   for (const a of state.agents) {
     if ((a.kind === "image" || a.kind === "video") && focusIds.has(a.connectionId) && !state.config.agentIds.includes(a.id)) state.config.agentIds.push(a.id);
   }
+  // v8: skills for every chat, and the tools (internet, device)
+  state.settings.skills ??= [];
+  state.settings.tools ??= defaultTools();
   state.version = STATE_VERSION;
   return state;
 }
