@@ -883,6 +883,10 @@ html.dark .app-root .md code {
   .app-root .composer-dock .composer {
     background: var(--card);
   }
+  /* the drawer sits over the chat, so it must be fully opaque or the text shows through */
+  .app-root .side {
+    background: var(--side);
+  }
   html.dark .app-root .composer,
   html.dark .app-root .composer-dock .composer {
     background: #18181c;
