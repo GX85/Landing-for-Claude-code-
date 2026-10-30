@@ -55,13 +55,17 @@ Hard rules:
 - Works on phones and desktops: responsive layout and touch controls as well as keyboard and mouse.
 - The page runs in a sandbox where reading localStorage or sessionStorage throws a SecurityError: wrap every use in try/catch and fall back to a plain variable.
 - All visible text in the user's language.
-- Make it look designed, not like a tutorial: a coherent colour palette, a system font stack with real hierarchy, generous spacing, soft shadows, smooth transitions.`;
+- Make it look designed, not like a tutorial: a coherent colour palette, a system font stack with real hierarchy, generous spacing, soft shadows, smooth transitions.
+- Design system first: define colours, radii, spacing and shadows as CSS variables in :root, use a 4/8px spacing scale, fluid type with clamp(), and honour prefers-color-scheme and prefers-reduced-motion.
+- Craft: semantic HTML (header, main, section, button), visible focus states, buttons at least 44px tall, hover and active states on everything clickable, inline SVG icons (never emoji as the only icon), and text that never overflows its box (min-width:0, overflow-wrap:anywhere, wrapping flex/grid).
+- Content: real, specific copy and plausible sample data for this exact request; no lorem ipsum, no "Item 1".
+- Before you answer, re-read your code once for typos, unclosed tags, undefined names and missing event handlers.`;
 
 const KIND_RULES: Record<Exclude<BuildKind, "presentation">, string> = {
   game: `Game requirements: a title screen with a Start button and a controls hint; score and a best score saved in localStorage; a game-over screen with Restart; difficulty that ramps up; a requestAnimationFrame loop using delta time; a canvas that fills the window and handles resize and devicePixelRatio; pause when the tab is hidden. Add juice: particles, easing, a little screen shake. On touch screens show on-screen buttons or use swipes. For 3D use three.js r128 with lights, fog and simple procedural low-poly geometry, and keep it smooth on phones.`,
-  website: `Website requirements: a complete page with a sticky nav (and a mobile menu), a hero with a strong headline and call to action, 3 to 5 content sections (for example features, how it works, testimonials or pricing, FAQ) and a footer. Specific, persuasive copy for this exact business, never lorem ipsum. Use CSS gradients, inline SVG and emoji instead of image files. Smooth scrolling and gentle reveal-on-scroll animations.`,
+  website: `Website requirements: a complete page with a sticky nav (and a mobile menu), a hero with a strong headline and call to action, 3 to 5 content sections (for example features, how it works, testimonials or pricing, FAQ) and a footer. Specific, persuasive copy for this exact business, never lorem ipsum. Use CSS gradients, inline SVG and emoji instead of image files. Smooth scrolling and gentle reveal-on-scroll animations (IntersectionObserver), a working mobile menu, a contact or signup form with validation and a success message, and a consistent section rhythm with alternating backgrounds.`,
   clip: `Clip requirements: a short animated film, 8 to 12 seconds, that starts playing the moment the page opens and loops. Draw it on a canvas that fills the window (handle resize and devicePixelRatio), driven by one requestAnimationFrame timeline with easing. Tell a tiny story in three beats (setup, change, payoff) with cinematic composition: layered parallax, a moving camera (slow zoom or pan), glow, particles, gradients and one short on-screen title or caption that fades in and out. Colour and mood must match the request. No buttons or controls, no audio, nothing to click.`,
-  app: `App requirements: every feature actually works; state is saved in localStorage; friendly empty states; input validation; keyboard shortcuts where natural; accessible labels. An app-like layout that fits a phone screen and scales up nicely.`,
+  app: `App requirements: every feature actually works; state is saved in localStorage; friendly empty states; input validation; keyboard shortcuts where natural; accessible labels. An app-like layout that fits a phone screen and scales up nicely. Add undo or confirm for destructive actions, instant feedback (toasts), search or filters where the data grows, and sample data so the first screen is not empty.`,
 };
 
 const DECK_SYSTEM = `You are Focus, a presentation designer and writer. Turn the user's request into a slide deck. Reply with ONLY a JSON object: no code fences, no comments, no text before or after.
@@ -76,9 +80,13 @@ A Slide is one of:
 {"layout":"stats","title":string,"stats":[{"value":string,"label":string}]}   // 2 to 4 stats
 {"layout":"quote","quote":string,"author":string}
 {"layout":"steps","title":string,"steps":[{"title":string,"text":string}]}   // 3 to 5 steps
+{"layout":"timeline","title":string,"events":[{"when":string,"title":string,"text":string}]}   // 3 to 5 events
+{"layout":"chart","title":string,"unit":string,"bars":[{"label":string,"value":number}],"takeaway":string}   // 3 to 6 bars, real or plausible numbers
+{"layout":"cards","title":string,"cards":[{"icon":string,"title":string,"text":string}]}   // 3 or 4 cards, icon is one emoji
+{"layout":"compare","title":string,"columns":string[],"rows":string[][]}   // 2 to 4 columns, 3 to 5 rows, short cells
 {"layout":"closing","title":string,"subtitle":string}
 
-Rules: 8 to 12 slides unless the user asks for a number. Start with "title" and end with "closing". Mix the layouts and tell a story with a clear arc. Specific, vivid, useful content, no placeholders. If you invent numbers, make them plausible and mark them as estimates in the label. All text in the user's language. Pick the theme that suits the topic.`;
+Rules: 8 to 12 slides unless the user asks for a number. Use at least four different layouts, and a chart, timeline, cards or compare slide wherever the content fits one. Start with "title" and end with "closing". Mix the layouts and tell a story with a clear arc. Specific, vivid, useful content, no placeholders. If you invent numbers, make them plausible and mark them as estimates in the label. All text in the user's language. Pick the theme that suits the topic.`;
 
 /* ---------- helpers ---------- */
 
@@ -237,6 +245,13 @@ interface Slide {
   quote?: string;
   author?: string;
   steps?: { title?: string; text?: string }[];
+  events?: { when?: string; title?: string; text?: string }[];
+  bars?: { label?: string; value?: number | string }[];
+  unit?: string;
+  takeaway?: string;
+  cards?: { icon?: string; title?: string; text?: string }[];
+  columns?: string[];
+  rows?: string[][];
 }
 
 function parseDeck(text: string): Deck | null {
@@ -308,6 +323,17 @@ function slideHtml(s: Slide, i: number): string {
       return `<div class="center">${el("blockquote", "", 0, `“${esc(s.quote)}”`)}${s.author ? el("p", "sub", 1, `— ${esc(s.author)}`) : ""}</div>`;
     case "steps":
       return `${el("h2", "", 0, esc(s.title))}<ol class="steps">${(s.steps ?? []).slice(0, 5).map((x, k) => el("li", "", k + 1, `<i>${k + 1}</i><b>${esc(x.title)}</b><span>${esc(x.text)}</span>`)).join("")}</ol>`;
+    case "timeline":
+      return `${el("h2", "", 0, esc(s.title))}<ol class="tl">${(s.events ?? []).slice(0, 5).map((x, k) => el("li", "", k + 1, `<em>${esc(x.when)}</em><b>${esc(x.title)}</b><span>${esc(x.text)}</span>`)).join("")}</ol>`;
+    case "chart": {
+      const bars = (s.bars ?? []).slice(0, 6).map((x) => ({ label: x.label, value: Number(String(x.value).replace(/[^\d.\-]/g, "")) || 0 }));
+      const max = Math.max(1, ...bars.map((x) => x.value));
+      return `${el("h2", "", 0, esc(s.title))}<div class="bars">${bars.map((x, k) => el("div", "bar-row", k + 1, `<span>${esc(x.label)}</span><i style="--w:${Math.max(4, Math.round((x.value / max) * 100))}%"></i><b>${esc(x.value)}${s.unit ? ` ${esc(s.unit)}` : ""}</b>`)).join("")}</div>${s.takeaway ? el("p", "sub", 8, esc(s.takeaway)) : ""}`;
+    }
+    case "cards":
+      return `${el("h2", "", 0, esc(s.title))}<div class="grid">${(s.cards ?? []).slice(0, 4).map((x, k) => el("div", "card", k + 1, `<div class="ico">${esc(x.icon)}</div><h3>${esc(x.title)}</h3><p>${esc(x.text)}</p>`)).join("")}</div>`;
+    case "compare":
+      return `${el("h2", "", 0, esc(s.title))}${el("table", "", 1, `<thead><tr>${(s.columns ?? []).slice(0, 4).map((c) => `<th>${esc(c)}</th>`).join("")}</tr></thead><tbody>${(s.rows ?? []).slice(0, 5).map((r) => `<tr>${(r ?? []).slice(0, 4).map((c) => `<td>${esc(c)}</td>`).join("")}</tr>`).join("")}</tbody>`)}`;
     case "closing":
       return `<div class="center">${el("h1", "", 0, esc(s.title))}${s.subtitle ? el("p", "sub", 1, esc(s.subtitle)) : ""}</div>`;
     default:
@@ -319,7 +345,7 @@ function slideHtml(s: Slide, i: number): string {
 export function renderDeck(deck: Deck): string {
   const t = THEMES[deck.theme ?? ""] ?? THEMES.aurora;
   const slides = (deck.slides ?? []).map((s, i) => `<section class="slide ${esc(s.layout ?? "bullets")}" aria-label="Slide ${i + 1}">${slideHtml(s, i)}</section>`).join("\n");
-  return `<!DOCTYPE html>
+  const page = `<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(deck.title)}</title>
 <style>
 :root{--bg:${t.bg};--fg:${t.fg};--muted:${t.muted};--a:${t.a};--b:${t.b};--card:${t.card}}
@@ -353,6 +379,15 @@ blockquote{font-size:70px;line-height:1.15;letter-spacing:-.025em;font-weight:70
 .steps{list-style:none;display:grid;gap:24px}.steps li{display:grid;grid-template-columns:64px 1fr;column-gap:26px;align-items:start}
 .steps i{grid-row:span 2;display:grid;place-items:center;width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,var(--a),var(--b));color:var(--bg);font-style:normal;font-weight:800;font-size:28px}
 .steps b{font-size:34px}.steps span{font-size:26px;color:var(--muted);line-height:1.35}
+.tl{list-style:none;display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:28px;border-top:4px solid var(--card);padding-top:34px}
+.tl li{display:flex;flex-direction:column;gap:10px;position:relative}.tl li::before{content:"";position:absolute;left:0;top:-46px;width:20px;height:20px;border-radius:50%;background:linear-gradient(135deg,var(--a),var(--b))}
+.tl em{font-style:normal;font-size:24px;color:var(--a);font-weight:700;letter-spacing:.06em}.tl b{font-size:32px;line-height:1.15}.tl span{font-size:24px;color:var(--muted);line-height:1.35}
+.bars{display:grid;gap:22px}.bar-row{display:grid;grid-template-columns:260px 1fr 190px;align-items:center;gap:26px;font-size:28px}
+.bar-row span{color:var(--muted)}.bar-row i{display:block;height:34px;border-radius:12px;background:linear-gradient(90deg,var(--a),var(--b));width:0;transition:width 1s cubic-bezier(.2,.8,.2,1) .5s}
+.slide.on .bar-row i{width:var(--w)}.bar-row b{font-size:32px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:30px}.grid .card h3{margin-bottom:10px;color:var(--fg)}.grid .card p{font-size:26px;color:var(--muted);line-height:1.35}.ico{font-size:54px;margin-bottom:14px}
+table{width:100%;border-collapse:separate;border-spacing:0;font-size:28px;line-height:1.3;background:var(--card);border:1px solid rgba(127,127,127,.18);border-radius:24px;overflow:hidden}
+th{text-align:left;padding:20px 28px;font-size:24px;letter-spacing:.06em;text-transform:uppercase;color:var(--a);border-bottom:1px solid rgba(127,127,127,.2)}td{padding:18px 28px;border-bottom:1px solid rgba(127,127,127,.12)}tr:last-child td{border-bottom:0}
 .bar{position:absolute;left:0;top:0;height:6px;background:linear-gradient(90deg,var(--a),var(--b));z-index:3;transition:width .6s cubic-bezier(.2,.8,.2,1)}
 .foot{position:absolute;left:130px;right:130px;bottom:46px;display:flex;justify-content:space-between;font-size:20px;color:var(--muted);z-index:3;letter-spacing:.02em}
 .nav{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);display:flex;gap:10px;z-index:5;opacity:.85}
@@ -371,7 +406,9 @@ ${slides}
 (function(){
   var stage=document.getElementById("stage"),slides=[].slice.call(document.querySelectorAll(".slide")),bar=document.getElementById("bar"),count=document.getElementById("count"),cur=0;
   function fit(){var s=Math.min(innerWidth/1600,innerHeight/900);stage.style.transform="translate(-50%,-50%) scale("+s+")";stage.style.borderRadius=(s<1?18:0)+"px"}
-  function go(n){cur=Math.max(0,Math.min(slides.length-1,n));slides.forEach(function(el,i){el.classList.toggle("on",i===cur);el.classList.toggle("past",i<cur)});bar.style.width=((cur+1)/slides.length*100)+"%";count.textContent=(cur+1)+" / "+slides.length}
+  function low(el){var m=0;[].forEach.call(el.querySelectorAll(".r"),function(c){var y=0,n=c;while(n&&n!==el){y+=n.offsetTop;n=n.offsetParent}m=Math.max(m,y+c.offsetHeight)});return m}
+  function fitText(el){var z=1;el.style.setProperty("--z",1);for(var t=0;t<12&&low(el)>800;t++){z-=.05;el.style.setProperty("--z",z)}}
+  function go(n){cur=Math.max(0,Math.min(slides.length-1,n));fitText(slides[cur]);slides.forEach(function(el,i){el.classList.toggle("on",i===cur);el.classList.toggle("past",i<cur)});bar.style.width=((cur+1)/slides.length*100)+"%";count.textContent=(cur+1)+" / "+slides.length}
   addEventListener("resize",fit);fit();go(0);
   addEventListener("keydown",function(e){if(["ArrowRight","ArrowDown","PageDown"," ","Enter"].indexOf(e.key)>=0){e.preventDefault();go(cur+1)}else if(["ArrowLeft","ArrowUp","PageUp","Backspace"].indexOf(e.key)>=0){e.preventDefault();go(cur-1)}else if(e.key==="Home")go(0);else if(e.key==="End")go(slides.length-1)});
   document.getElementById("next").onclick=function(e){e.stopPropagation();go(cur+1)};
@@ -382,6 +419,8 @@ ${slides}
 })();
 </script>
 </body></html>`;
+  // every font size scales with --z, so a slide that overflows can shrink its own text
+  return page.replace(/<style>[\s\S]*?<\/style>/, (css) => css.replace(/font-size:(\d+)px/g, "font-size:calc($1px*var(--z,1))"));
 }
 
 /* ---------- games: the model writes the game, the engine runs it ---------- */

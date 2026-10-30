@@ -5,6 +5,7 @@ import { renderMarkdown, renderMarkdownStreaming } from "./markdown";
 import { ACCEPT, dataUrlOf, readAttachments } from "./attachments";
 import { generateGreeting, resolveMedia, setConnections, type ImagePart } from "./api";
 import { modeInfo, MODES, startRun } from "./modes";
+import { detectBuild } from "./builder";
 import { click, setSound } from "./sound";
 import { agentAvatar, applyHub, focusMark } from "./brand";
 import { agentMascot } from "../mascot";
@@ -545,7 +546,7 @@ function messageEl(ctx: Ctx, chat: Chat, m: Message): HTMLElement {
             "div",
             { class: "msg-files" },
             ...m.attachments.map((a) =>
-              a.kind === "image" && a.data ? h("img", { class: "msg-image", src: dataUrlOf(a), alt: a.name }) : h("span", { class: "file-chip" }, icon("file", 14), a.name),
+              a.kind === "image" && a.data ? h("img", { class: "msg-image", src: dataUrlOf(a), alt: a.name }) : h("span", { class: "file-chip" }, icon("file", 14), h("span", { class: "chip-name" }, a.name)),
             ),
           )
         : null,
@@ -731,12 +732,21 @@ function historyBefore(chat: Chat, userMsg: Message): ChatTurn[] {
   return turns.slice(start);
 }
 
+const IMAGE_ASK = /(нарисуй|сгенерируй|создай|сделай|\bdraw\b|\bgenerate\b|\bcreate\b|\bmake\b)[^.!?]{0,40}(картинк|изображени|фото|рисунок|иллюстраци|логотип|постер|обои|\bimage\b|\bpicture\b|\bphoto\b|\blogo\b|illustration|poster|wallpaper)/i;
+
+function mediaIntent(text: string): CreateKind | undefined {
+  const t = text.slice(0, 600);
+  if (detectBuild(t) === "clip") return "video";
+  return IMAGE_ASK.test(t) ? "image" : undefined;
+}
+
 async function runTurn(ctx: Ctx, chat: Chat, userMsg: Message): Promise<void> {
   // Focus: one assistant per tier. Aeronus (and chats from before hubs existed): the whole team.
   const focusHub = chat.config.hub === "focus";
   const built = focusHub ? focusAgentOf(ctx, chat.config) : undefined;
   setToolsConfig(ctx.state.settings.tools);
-  const create = userMsg.create;
+  // in Aeronus a plain "make a video / draw a picture" goes to the generators without picking Create first
+  const create = userMsg.create ?? (focusHub ? undefined : mediaIntent(userMsg.content));
   // pictures and video go to a generator; games, decks, sites and apps force the Builder on the chat model
   const media = create === "image" || create === "video" ? generatorAgent(ctx, create) : undefined;
   const base = built ? builtAgent(ctx, built) : focusHub ? tierAgent(ctx, chat.config.tier, chat.config.think ?? 0) : undefined;
@@ -951,7 +961,7 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onH
           "span",
           { class: "file-chip" },
           f.kind === "image" && f.data ? h("img", { class: "chip-thumb", src: dataUrlOf(f), alt: "" }) : icon("file", 14),
-          f.name,
+          h("span", { class: "chip-name" }, f.name),
           h(
             "button",
             {

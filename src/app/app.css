@@ -2198,3 +2198,27 @@ html.dark .app-root .chat-item.active {
 html.dark .app-root .main-head {
   background: linear-gradient(to bottom, #0b0b0d 0, #0b0b0d 80%, transparent) !important;
 }
+
+/* long words, file names and error texts wrap or shorten instead of leaving their box */
+.chip-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-chip > svg,
+.file-chip > img,
+.file-chip > button {
+  flex: none;
+}
+
+.app-root :where(p, li, h1, h2, h3, h4, small, strong, label, .hint, .step-error, .step-text, .menu-text, .card, .field, .bubble, .md, .note, .toast) {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.app-root :where(.step, .step-head, .menu-text, .card > div, .page-inner > *) {
+  min-width: 0;
+  max-width: 100%;
+}
