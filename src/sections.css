@@ -2383,3 +2383,40 @@
     justify-content: flex-end;
   }
 }
+
+/* "Open app": a small, centred pill in every state */
+.nav .nav-app {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  height: 34px;
+  margin: 0;
+  padding: 0 14px;
+  border-radius: 999px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.nav.scrolled .nav-app {
+  height: 32px;
+  margin: 0;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+.nav-group.nav-social {
+  align-items: center;
+}
+
+@media (max-width: 560px) {
+  .nav.scrolled .nav-app {
+    height: 30px;
+    padding: 0 12px;
+    font-size: 12.5px;
+  }
+
+  .nav.scrolled {
+    padding: 6px 6px 6px 18px;
+  }
+}
