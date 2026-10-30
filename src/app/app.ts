@@ -314,7 +314,8 @@ let lastKey = "";
 /** The page slides in from the right when going deeper and from the left when going back, so swiping back feels like going back. */
 function slideIn(from: Route | undefined, to: Route): void {
   const key = routePath(to);
-  if (key === lastKey || !from || matchMedia("(prefers-reduced-motion: reduce)").matches) {
+  // a new chat turning into the saved chat after the first message is the same screen: no slide, no blink
+  if (key === lastKey || !from || from.name === to.name || matchMedia("(prefers-reduced-motion: reduce)").matches) {
     lastKey = key;
     return;
   }

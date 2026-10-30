@@ -8,10 +8,10 @@ import { getLang } from "../i18n";
 export interface ToolsConfig {
   web: boolean;
   location: boolean;
-  bridge: { on: boolean; url: string; token: string; shell: boolean };
+  bridge: { on: boolean; url: string; token: string; shell: boolean; /** open apps and links, clipboard, notifications, typing, screenshots */ control?: boolean };
 }
 
-export const defaultTools = (): ToolsConfig => ({ web: true, location: false, bridge: { on: false, url: "http://127.0.0.1:7788", token: "", shell: false } });
+export const defaultTools = (): ToolsConfig => ({ web: true, location: false, bridge: { on: false, url: "http://127.0.0.1:7788", token: "", shell: false, control: true } });
 
 let cfg: ToolsConfig = defaultTools();
 export const setToolsConfig = (c: ToolsConfig | undefined) => (cfg = c ?? defaultTools());
@@ -30,7 +30,9 @@ export interface Source {
   url: string;
 }
 
-const NAMES = ["web_search", "web_fetch", "my_location", "fs_list", "fs_read", "fs_search", "shell", "device_info"];
+const CONTROL = ["open", "clipboard_read", "clipboard_write", "notify", "type_text", "screenshot"];
+const NAMES = ["web_search", "web_fetch", "my_location", "fs_list", "fs_read", "fs_search", "shell", "device_info", ...CONTROL];
+const controlOn = () => cfg.bridge.on && !!cfg.bridge.token && cfg.bridge.control !== false;
 
 /** The instructions that teach a model to use the tools that are switched on. */
 export function toolsPrompt(): string {
@@ -46,6 +48,14 @@ export function toolsPrompt(): string {
     lines.push('fs_read {"path": string} — read a text file on the user\'s device.');
     lines.push('fs_search {"query": string, "path": string} — find files by name or by content under a folder.');
     if (cfg.bridge.shell) lines.push('shell {"command": string} — run a shell command on the user\'s device (the user approves each one).');
+    if (controlOn()) {
+      lines.push('open {"target": string} — open a link in the browser, a file from the folder above, or an app by name (e.g. "Calculator", "Spotify").');
+      lines.push("clipboard_read {} — read what the user copied.");
+      lines.push('clipboard_write {"text": string} — put text on the user\'s clipboard.');
+      lines.push('notify {"title": string, "text": string} — show a notification on the device (reminders, results).');
+      lines.push('type_text {"text": string} — type text into the window the user has open.');
+      lines.push("screenshot {} — save a screenshot of the screen into the folder above.");
+    }
   }
   const today = new Date().toISOString().slice(0, 10);
   return `You can use tools. Today is ${today}. To use one, reply with ONLY a fenced block and nothing else:\n\`\`\`tool\n{"tool": "web_search", "query": "…"}\n\`\`\`\nTools:\n${lines.map((l) => `- ${l}`).join("\n")}\nUse a tool when the answer depends on current or outside facts, on a web page, or on the user's own files. Otherwise answer directly. Never invent a result: wait for it. After a result you may call another tool, or answer. Cite sources you used by name. Don't repeat a call.`;
@@ -55,7 +65,8 @@ export function toolsPrompt(): string {
 export function intentHint(text: string): string {
   const web = /(найди в (интернете|сети)|в интернете|поищи|погугли|загугли|search (the )?(web|internet|online)|look (it )?up|google|latest news|сегодня|сейчас|актуальн|курс (доллар|евро|валют)|погод|новост|кто победил|last night)/i.test(text);
   const dev = /(мои файлы|моих файлах|моём компьютере|моем компьютере|на (моём|моем) (телефоне|устройстве)|в моей папке|my files|on my (phone|computer|device|laptop)|in my folder)/i.test(text);
-  const need = [web && cfg.web ? 'web_search (and web_fetch to open a result)' : "", dev && cfg.bridge.on && cfg.bridge.token ? "fs_search, fs_list or fs_read" : ""].filter(Boolean);
+  const act = /(открой|запусти|скопируй в буфер|буфер обмена|напомни|уведомлени|напечатай|скриншот|снимок экрана|\bopen\b|\blaunch\b|clipboard|remind me|notification|screenshot|type (this|it))/i.test(text);
+  const need = [web && cfg.web ? 'web_search (and web_fetch to open a result)' : "", dev && cfg.bridge.on && cfg.bridge.token ? "fs_search, fs_list or fs_read" : "", act && controlOn() ? "open, clipboard_read, clipboard_write, notify, type_text or screenshot" : ""].filter(Boolean);
   return need.length ? `\nThis message needs ${need.join(" and ")}: your reply must be a tool block right now, nothing else.` : "";
 }
 
@@ -88,9 +99,9 @@ export const looksLikeTool = (t: string): boolean => {
 /** A one-line note for the chat while a tool runs. */
 export function toolNote(call: ToolCall): string {
   const a = call.args;
-  const q = String(a.query ?? a.url ?? a.path ?? a.command ?? "").slice(0, 80);
-  const en: Record<string, string> = { web_search: "Searching the web", web_fetch: "Reading a page", my_location: "Checking the location", fs_list: "Looking at a folder", fs_read: "Reading a file", fs_search: "Searching your files", shell: "Running a command", device_info: "Checking the device" };
-  const rus: Record<string, string> = { web_search: "Ищу в интернете", web_fetch: "Читаю страницу", my_location: "Определяю место", fs_list: "Смотрю папку", fs_read: "Читаю файл", fs_search: "Ищу в ваших файлах", shell: "Выполняю команду", device_info: "Смотрю устройство" };
+  const q = String(a.query ?? a.url ?? a.path ?? a.command ?? a.target ?? a.title ?? "").slice(0, 80);
+  const en: Record<string, string> = { web_search: "Searching the web", web_fetch: "Reading a page", my_location: "Checking the location", fs_list: "Looking at a folder", fs_read: "Reading a file", fs_search: "Searching your files", shell: "Running a command", device_info: "Checking the device", open: "Opening", clipboard_read: "Reading the clipboard", clipboard_write: "Copying to the clipboard", notify: "Sending a notification", type_text: "Typing", screenshot: "Taking a screenshot" };
+  const rus: Record<string, string> = { web_search: "Ищу в интернете", web_fetch: "Читаю страницу", my_location: "Определяю место", fs_list: "Смотрю папку", fs_read: "Читаю файл", fs_search: "Ищу в ваших файлах", shell: "Выполняю команду", device_info: "Смотрю устройство", open: "Открываю", clipboard_read: "Читаю буфер обмена", clipboard_write: "Копирую в буфер", notify: "Отправляю уведомление", type_text: "Печатаю", screenshot: "Делаю скриншот" };
   return `${(ru() ? rus : en)[call.tool] ?? call.tool}${q ? `: ${q}` : ""}…`;
 }
 
@@ -157,6 +168,25 @@ export async function runTool(call: ToolCall, signal: AbortSignal): Promise<{ te
           const ok = confirm(`${ru() ? "Focus хочет выполнить команду на вашем устройстве:" : "Focus wants to run this command on your device:"}\n\n${String(a.command ?? "")}\n\n${ru() ? "Разрешить?" : "Allow?"}`);
           if (!ok) return { text: "The user declined to run this command.", sources };
         }
+        return { text: await bridge(call.tool, a, signal), sources };
+      }
+      case "open":
+      case "clipboard_read":
+      case "clipboard_write":
+      case "notify":
+      case "type_text":
+      case "screenshot": {
+        if (!controlOn()) return { text: "Device control is switched off in Settings.", sources };
+        const what: Record<string, [string, string]> = {
+          open: [`open ${String(a.target ?? "")}`, `открыть ${String(a.target ?? "")}`],
+          clipboard_read: ["read your clipboard", "прочитать буфер обмена"],
+          clipboard_write: [`copy to your clipboard:\n${String(a.text ?? "").slice(0, 300)}`, `скопировать в буфер обмена:\n${String(a.text ?? "").slice(0, 300)}`],
+          notify: [`show a notification: ${String(a.title ?? "")} — ${String(a.text ?? "")}`, `показать уведомление: ${String(a.title ?? "")} — ${String(a.text ?? "")}`],
+          type_text: [`type into the open window:\n${String(a.text ?? "").slice(0, 300)}`, `напечатать в открытом окне:\n${String(a.text ?? "").slice(0, 300)}`],
+          screenshot: ["take a screenshot", "сделать скриншот"],
+        };
+        const [en, rus] = what[call.tool];
+        if (!confirm(`${ru() ? "Focus хочет" : "Focus wants to"} ${ru() ? rus : en}\n\n${ru() ? "Разрешить?" : "Allow?"}`)) return { text: "The user declined this action.", sources };
         return { text: await bridge(call.tool, a, signal), sources };
       }
     }

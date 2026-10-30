@@ -6,6 +6,8 @@
  *   node focus-bridge.mjs                  # read-only, your home folder
  *   node focus-bridge.mjs --root ~/Documents
  *   node focus-bridge.mjs --shell          # also let Focus run commands (you approve each one in Focus)
+ *   node focus-bridge.mjs --no-control     # turn off device control (open apps and links, clipboard, typing,
+ *                                          # notifications, screenshots); each action is approved in Focus anyway
  *
  * Needs Node.js 18+. On Android install Termux, then: pkg install nodejs
  */
@@ -14,7 +16,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import crypto from "node:crypto";
-import { exec } from "node:child_process";
+import { exec, execFile } from "node:child_process";
 
 const args = process.argv.slice(2);
 const flag = (name) => args.includes(name);
@@ -23,6 +25,9 @@ const opt = (name, fallback) => (args.includes(name) ? args[args.indexOf(name) +
 const PORT = Number(opt("--port", "7788"));
 const ROOT = fs.realpathSync(path.resolve((opt("--root", os.homedir()) || os.homedir()).replace(/^~(?=$|\/)/, os.homedir())));
 const SHELL = flag("--shell");
+const CONTROL = !flag("--no-control");
+const OS = process.platform;
+const TERMUX = !!process.env.TERMUX_VERSION || fs.existsSync("/data/data/com.termux");
 const ORIGINS = ["https://focus-agents.vercel.app", ...(process.env.FOCUS_ORIGIN ? process.env.FOCUS_ORIGIN.split(",") : [])];
 
 // the token is kept between runs so Focus doesn't need to be re-paired every time
@@ -70,7 +75,7 @@ const isText = (buf) => !buf.subarray(0, 4000).includes(0);
 
 const tools = {
   device_info() {
-    return JSON.stringify({ system: `${os.type()} ${os.release()} (${os.platform()}/${os.arch()})`, host: os.hostname(), user: os.userInfo().username, folderFocusMayUse: ROOT, commands: SHELL ? "allowed (each one needs your approval)" : "off", node: process.version }, null, 2);
+    return JSON.stringify({ system: `${os.type()} ${os.release()} (${os.platform()}/${os.arch()})`, host: os.hostname(), user: os.userInfo().username, folderFocusMayUse: ROOT, commands: SHELL ? "allowed (each one needs your approval)" : "off", control: CONTROL ? "on: open, clipboard, notifications, typing, screenshots (each action needs your approval)" : "off", android: TERMUX, node: process.version }, null, 2);
   },
   fs_list({ path: p }) {
     const dir = resolveIn(p);
@@ -151,6 +156,117 @@ const tools = {
   },
 };
 
+/* ---------- device control: every action is approved by the user in Focus first ---------- */
+
+/** Runs a program with arguments (never through a shell, so nothing in the text can turn into a command). */
+const run = (file, argv, input) =>
+  new Promise((resolve, reject) => {
+    const child = execFile(file, argv, { timeout: 20_000, maxBuffer: 4_000_000, windowsHide: true }, (err, stdout, stderr) => {
+      if (err) reject(new Error(String(stderr || err.message).trim().slice(0, 400) || `${file} failed`));
+      else resolve(String(stdout));
+    });
+    if (input !== undefined) {
+      child.stdin?.end(input);
+    }
+  });
+
+/** The first program in the list that runs. */
+const first = async (attempts) => {
+  let last;
+  for (const [file, argv, input] of attempts) {
+    try {
+      return await run(file, argv, input);
+    } catch (error) {
+      last = error;
+    }
+  }
+  throw new Error(`Not available on this device${last ? ` (${last.message})` : ""}.`);
+};
+
+const needControl = () => {
+  if (!CONTROL) throw new Error("Device control is off (the bridge was started with --no-control).");
+};
+
+const ps = (script) => ["powershell", ["-NoProfile", "-NonInteractive", "-Command", script]];
+
+const control = {
+  async open({ target }) {
+    needControl();
+    let t = String(target ?? "").trim();
+    if (!t) throw new Error("What should I open?");
+    // a link opens in the browser; anything else is an app name or a file in the folder Focus may use
+    if (!/^(https?|mailto|tel):/i.test(t)) {
+      try {
+        t = resolveIn(t);
+      } catch {
+        // not a file: treat it as an app name
+        if (OS === "darwin") return (await run("open", ["-a", t]), `Opened the app ${t}.`);
+        if (OS === "win32") return (await run("cmd", ["/c", "start", "", t]), `Opened ${t}.`);
+        if (TERMUX) throw new Error("On Android, ask for a link or a file instead of an app name.");
+        return (await first([[t, []], ["gtk-launch", [t]]]), `Opened ${t}.`);
+      }
+    }
+    if (TERMUX) await first([["termux-open-url", [t]], ["termux-open", [t]]]);
+    else if (OS === "darwin") await run("open", [t]);
+    else if (OS === "win32") await run("cmd", ["/c", "start", "", t]);
+    else await first([["xdg-open", [t]], ["gio", ["open", t]]]);
+    return `Opened ${t}.`;
+  },
+  async clipboard_read() {
+    needControl();
+    const text = TERMUX
+      ? await run("termux-clipboard-get", [])
+      : OS === "darwin"
+        ? await run("pbpaste", [])
+        : OS === "win32"
+          ? await run(...ps("Get-Clipboard -Raw"))
+          : await first([["wl-paste", ["-n"]], ["xclip", ["-selection", "clipboard", "-o"]], ["xsel", ["-b", "-o"]]]);
+    return text.length > TEXT_LIMIT ? `${text.slice(0, TEXT_LIMIT)}\n…` : text || "(the clipboard is empty)";
+  },
+  async clipboard_write({ text }) {
+    needControl();
+    const t = String(text ?? "");
+    if (TERMUX) await run("termux-clipboard-set", [], t);
+    else if (OS === "darwin") await run("pbcopy", [], t);
+    else if (OS === "win32") await run(...ps("$input | Set-Clipboard"), t);
+    else await first([["wl-copy", [], t], ["xclip", ["-selection", "clipboard"], t], ["xsel", ["-b", "-i"], t]]);
+    return `Copied ${t.length} characters to the clipboard.`;
+  },
+  async notify({ title, text }) {
+    needControl();
+    const a = String(title ?? "Focus").slice(0, 80);
+    const b = String(text ?? "").slice(0, 300);
+    if (TERMUX) await run("termux-notification", ["--title", a, "--content", b]);
+    else if (OS === "darwin") await run("osascript", ["-e", "on run argv", "-e", "display notification (item 2 of argv) with title (item 1 of argv)", "-e", "end run", a, b]);
+    else if (OS === "win32") await run(...ps("$l = @($input); Add-Type -AssemblyName System.Windows.Forms; $n = New-Object System.Windows.Forms.NotifyIcon; $n.Icon = [System.Drawing.SystemIcons]::Information; $n.Visible = $true; $n.ShowBalloonTip(5000, $l[0], ($l | Select-Object -Skip 1) -join ' ', 'Info'); Start-Sleep 6; $n.Dispose()"), `${a.replace(/\n/g, " ")}\n${b}`);
+    else await run("notify-send", [a, b]);
+    return "Notification shown.";
+  },
+  async type_text({ text }) {
+    needControl();
+    const t = String(text ?? "").slice(0, 2000);
+    if (!t) throw new Error("What should I type?");
+    if (TERMUX) throw new Error("Typing into other apps isn't possible on Android.");
+    if (OS === "darwin") await run("osascript", ["-e", "on run argv", "-e", 'tell application "System Events" to keystroke (item 1 of argv)', "-e", "end run", t]);
+    else if (OS === "win32") await run(...ps("Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait(($input | Out-String).TrimEnd() -replace '([+^%~(){}\\[\\]])','{$1}')"), t);
+    else await first([["wtype", [t]], ["xdotool", ["type", "--delay", "8", "--", t]]]);
+    return `Typed ${t.length} characters into the active window.`;
+  },
+  async screenshot() {
+    needControl();
+    const dir = path.join(ROOT, "Focus screenshots");
+    fs.mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, `screen-${new Date().toISOString().replace(/[:.]/g, "-")}.png`);
+    if (TERMUX) throw new Error("Android doesn't let programs take screenshots of other apps.");
+    if (OS === "darwin") await run("screencapture", ["-x", file]);
+    else if (OS === "win32")
+      await run(...ps(`Add-Type -AssemblyName System.Windows.Forms,System.Drawing; $b = [System.Windows.Forms.SystemInformation]::VirtualScreen; $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height; $g = [System.Drawing.Graphics]::FromImage($bmp); $g.CopyFromScreen($b.Left, $b.Top, 0, 0, $bmp.Size); $bmp.Save('${file.replace(/'/g, "''")}')`));
+    else await first([["grim", [file]], ["gnome-screenshot", ["-f", file]], ["spectacle", ["-b", "-n", "-o", file]], ["import", ["-window", "root", file]], ["scrot", [file]]]);
+    return `Saved a screenshot to ${path.relative(ROOT, file)}.`;
+  },
+};
+Object.assign(tools, control);
+
 const send = (res, status, body, headers = {}) => {
   res.writeHead(status, { "content-type": "application/json", ...headers });
   res.end(JSON.stringify(body));
@@ -166,7 +282,7 @@ http
     const given = Buffer.from(String(req.headers["x-focus-token"] ?? ""));
     const want = Buffer.from(TOKEN);
     const ok = given.length === want.length && crypto.timingSafeEqual(given, want);
-    if (req.url === "/ping") return send(res, ok ? 200 : 401, ok ? { ok: true, root: ROOT, shell: SHELL } : { error: "Wrong token." }, cors);
+    if (req.url === "/ping") return send(res, ok ? 200 : 401, ok ? { ok: true, root: ROOT, shell: SHELL, control: CONTROL } : { error: "Wrong token." }, cors);
     if (req.url !== "/tool" || req.method !== "POST") return send(res, 404, { error: "Not found." }, cors);
     if (!ok) return send(res, 401, { error: "Wrong token." }, cors);
     let raw = "";
@@ -183,5 +299,5 @@ http
     }
   })
   .listen(PORT, "127.0.0.1", () => {
-    console.log(`\nFocus device bridge is running.\n\n  Address:  http://127.0.0.1:${PORT}\n  Key:      ${TOKEN}\n  Folder:   ${ROOT}\n  Commands: ${SHELL ? "ON (you approve each one in Focus)" : "off"}\n\nPaste the address and key into Focus → Settings → Device. Press Ctrl+C to stop.\n`);
+    console.log(`\nFocus device bridge is running.\n\n  Address:  http://127.0.0.1:${PORT}\n  Key:      ${TOKEN}\n  Folder:   ${ROOT}\n  Commands: ${SHELL ? "ON (you approve each one in Focus)" : "off"}\n  Control:  ${CONTROL ? "ON (open, clipboard, notifications, typing, screenshots; you approve each one)" : "off"}\n\nPaste the address and key into Focus → Settings → Device. Press Ctrl+C to stop.\n`);
   });

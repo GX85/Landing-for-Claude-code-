@@ -164,8 +164,8 @@ function toolsSection(ctx: Ctx): HTMLElement {
     status.textContent = "Connecting…";
     try {
       const res = await fetch(`${t.bridge.url.replace(/\/$/, "")}/ping`, { headers: { "x-focus-token": t.bridge.token } });
-      const d = (await res.json()) as { ok?: boolean; root?: string; shell?: boolean; error?: string };
-      status.textContent = d.ok ? `Connected. Focus may use ${d.root}${d.shell ? " and run commands" : " (read only)"}.` : d.error || "The key isn't right.";
+      const d = (await res.json()) as { ok?: boolean; root?: string; shell?: boolean; control?: boolean; error?: string };
+      status.textContent = d.ok ? `Connected. Folder: ${d.root}. Control: ${d.control ? "on" : "off"}. Commands: ${d.shell ? "on" : "off"}.` : d.error || "The key isn't right.";
     } catch {
       status.textContent = "Can't reach it. Is the program running on that device?";
     }
@@ -178,6 +178,7 @@ function toolsSection(ctx: Ctx): HTMLElement {
     h("p", {}, "2. Download the small program: ", h("a", { href: "/focus-bridge.mjs", download: "focus-bridge.mjs" }, "focus-bridge.mjs")),
     h("p", {}, "3. Run it: node focus-bridge.mjs   (add --root ~/Documents to limit it to one folder, and --shell to let Focus run commands)"),
     h("p", {}, "4. Paste the address and key it prints here, then switch the connection on. It only listens on that device."),
+    h("p", {}, "Then just ask: “open YouTube”, “copy this to my clipboard”, “remind me with a notification”, “take a screenshot”, “find my report about Friday”. On Android also install the Termux:API app and run: pkg install termux-api"),
   );
   return h(
     "section",
@@ -189,6 +190,7 @@ function toolsSection(ctx: Ctx): HTMLElement {
     row("My location", "Use the position of this device (the browser asks you).", sw(t.location, "Location", (on) => ((t.location = on), save()))),
     row("Computer or phone", "Look through a folder on a device and find what's needed.", sw(t.bridge.on, "Device connection", (on) => ((t.bridge.on = on), save()))),
     h("div", { class: "set-body" }, url, key),
+    row("Control the device", "Open apps and links, use the clipboard, show notifications, type text and take screenshots. You approve each action.", sw(t.bridge.control !== false, "Control the device", (on) => ((t.bridge.control = on), save()))),
     row("Allow commands", "Focus may run commands there; you approve each one.", sw(t.bridge.shell, "Allow commands", (on) => ((t.bridge.shell = on), save()))),
     h("div", { class: "set-actions" }, test),
     status,

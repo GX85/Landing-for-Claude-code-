@@ -5,7 +5,6 @@ import { renderMarkdown, renderMarkdownStreaming } from "./markdown";
 import { ACCEPT, dataUrlOf, readAttachments } from "./attachments";
 import { generateGreeting, resolveMedia, setConnections, type ImagePart } from "./api";
 import { modeInfo, MODES, startRun } from "./modes";
-import { detectBuild } from "./builder";
 import { click, setSound } from "./sound";
 import { agentAvatar, applyHub, focusMark } from "./brand";
 import { agentMascot } from "../mascot";
@@ -21,7 +20,7 @@ const SCENE_POSTER = "https://d2ol7oe51mr4n9.cloudfront.net/user_38xzZboKViGWJOt
 const HISTORY_CHARS = 200_000;
 
 const SUGGESTIONS: { mode: Chat["config"]["mode"]; text: string; kind?: "image" }[] = [
-  { mode: "solo", kind: "image", text: "A floating island with a waterfall above sunset clouds, cinematic, ultra detailed" },
+  { mode: "solo", text: "Give me three bold names for a coffee brand, with one line on each." },
   { mode: "compare", text: "Explain how a transformer model works, in five sentences." },
   { mode: "debate", text: "Should an early-stage startup build its own AI stack or buy one?" },
   { mode: "planner", text: "Plan the launch of a mobile habit-tracking app: positioning, channels and a 4-week timeline." },
@@ -418,14 +417,17 @@ function thinkingLabel(): HTMLSpanElement {
 /* ---------- messages ---------- */
 
 /** The chat's ready agents, in the order of the Agents page. */
+/** Aeronus is a team of thinkers: picture and video generators aren't offered there. */
+const inTeam = (a: Agent) => a.kind !== "image" && a.kind !== "video";
+
 function teamOf(ctx: Ctx, config: ChatConfig): Agent[] {
-  return ctx.state.agents.filter((a) => config.agentIds.includes(a.id) && isReady(ctx.state, a));
+  return ctx.state.agents.filter((a) => inTeam(a) && config.agentIds.includes(a.id) && isReady(ctx.state, a));
 }
 
 function leadOf(ctx: Ctx, config: ChatConfig, team: Agent[]): Agent | undefined {
   // in Solo you can talk to any agent; elsewhere the lead has to reason in text
   const thinkers = team.filter((a) => a.kind === "chat");
-  const pool = config.mode === "solo" ? ctx.state.agents.filter((a) => isReady(ctx.state, a)) : thinkers.length ? thinkers : team;
+  const pool = config.mode === "solo" ? ctx.state.agents.filter((a) => inTeam(a) && isReady(ctx.state, a)) : thinkers.length ? thinkers : team;
   return pool.find((a) => a.id === config.leadId) ?? pool.find((a) => a.kind === "chat" && connectionOf(ctx.state, a)?.provider !== "webhook") ?? pool[0];
 }
 
@@ -740,21 +742,13 @@ function historyBefore(chat: Chat, userMsg: Message): ChatTurn[] {
   return turns.slice(start);
 }
 
-const IMAGE_ASK = /(нарисуй|сгенерируй|создай|сделай|\bdraw\b|\bgenerate\b|\bcreate\b|\bmake\b)[^.!?]{0,40}(картинк|изображени|фото|рисунок|иллюстраци|логотип|постер|обои|\bimage\b|\bpicture\b|\bphoto\b|\blogo\b|illustration|poster|wallpaper)/i;
-
-function mediaIntent(text: string): CreateKind | undefined {
-  const t = text.slice(0, 600);
-  if (detectBuild(t) === "clip") return "video";
-  return IMAGE_ASK.test(t) ? "image" : undefined;
-}
-
 async function runTurn(ctx: Ctx, chat: Chat, userMsg: Message): Promise<void> {
   // Focus: one assistant per tier. Aeronus (and chats from before hubs existed): the whole team.
   const focusHub = chat.config.hub === "focus";
   const built = focusHub ? focusAgentOf(ctx, chat.config) : undefined;
   setToolsConfig(ctx.state.settings.tools);
   // in Aeronus a plain "make a video / draw a picture" goes to the generators without picking Create first
-  const create = userMsg.create ?? (focusHub ? undefined : mediaIntent(userMsg.content));
+  const create = focusHub ? userMsg.create : undefined;
   // pictures and video go to a generator; games, decks, sites and apps force the Builder on the chat model
   const media = create === "image" || create === "video" ? generatorAgent(ctx, create) : undefined;
   const base = built ? builtAgent(ctx, built) : focusHub ? tierAgent(ctx, chat.config.tier, chat.config.think ?? 0) : undefined;
@@ -1322,8 +1316,8 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onH
       "div",
       { class: "menu plus-menu" },
       h("button", { class: "menu-item", type: "button", onclick: () => (closePopover(), fileInput.click()) }, icon("clip", 18), h("span", { class: "menu-text" }, h("strong", {}, "Attach files"), h("small", {}, "Photos, video, PDFs and text files"))),
-      h("div", { class: "menu-title" }, "Create"),
-      ...CREATE.filter((c) => hubOf(config) === "focus" || c.kind === "image" || c.kind === "video").map((c) =>
+      hubOf(config) === "focus" ? h("div", { class: "menu-title" }, "Create") : null,
+      ...CREATE.filter(() => hubOf(config) === "focus").map((c) =>
         h(
           "button",
           {
@@ -1512,7 +1506,7 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onH
       const lead = leadOf(ctx, config, team);
       fill(wrap,
         h("div", { class: "menu-title" }, solo ? "Chat with" : "Team"),
-        ...ctx.state.agents.map((a) => {
+        ...ctx.state.agents.filter(inTeam).map((a) => {
           const problem = !a.enabled ? "turned off" : missing(ctx.state, a);
           const checked = solo ? lead?.id === a.id : config.agentIds.includes(a.id);
           return h(
