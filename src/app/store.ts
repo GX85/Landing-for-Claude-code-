@@ -341,7 +341,7 @@ export interface State {
   /** Agents the user built in Focus. */
   focusAgents: FocusAgent[];
   /** Which model answers in each hub; "auto" leaves it to Focus. */
-  settings: { focus: ModelChoice; aeronus: ModelChoice; /** Skill ids switched on for every Focus chat. */ skills: string[]; tools: ToolsConfig };
+  settings: { focus: ModelChoice; aeronus: ModelChoice; /** Skill ids switched on for every Focus chat. */ skills: string[]; tools: ToolsConfig; /** Aeronus (the multi-agent team) is offered in the chat. */ teamMode?: boolean };
   version?: number;
 }
 
@@ -857,7 +857,7 @@ export function newAgent(connection: Connection, kind?: AgentKind): Agent {
   };
 }
 
-const STATE_VERSION = 8;
+const STATE_VERSION = 9;
 
 /** The Aeronus team out of the box: every one needs the user's own key. */
 const TEAM_PROVIDERS: Provider[] = ["anthropic", "openai", "gemini", "xai", "mistral", "qwen", "devin", "manus", "jules", "higgsfield", "luma", "replicate"];
@@ -934,6 +934,8 @@ function upgrade(state: State): State {
   // v8: skills for every chat, and the tools (internet, device)
   state.settings.skills ??= [];
   state.settings.tools ??= defaultTools();
+  // v9: Aeronus is switched on in Settings; people already using it keep it
+  state.settings.teamMode ??= state.config.hub === "aeronus" || state.chats.some((c) => c.config.hub === "aeronus");
   state.version = STATE_VERSION;
   return state;
 }

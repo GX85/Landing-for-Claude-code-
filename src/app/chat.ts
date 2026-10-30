@@ -12,6 +12,8 @@ import { agentMascot } from "../mascot";
 import { setToolsConfig } from "./tools";
 import { typeInto as handWrite, typePlaceholder } from "./typing";
 import { getLang, tr } from "../i18n";
+import { canRecord, startRecording, type Recording } from "./voice";
+import { displayUser, profileOf } from "./account";
 import { allSkills, choiceModel, connectionOf, isReady, KIND_LABEL, missing, newConnection, PERSONA, PROVIDERS, TIER_ORDER, TIERS, uid, type Agent, type Attachment, type Chat, type ChatConfig, type CreateKind, type FocusAgent, type Hub, type Message, type StepRecord, type Tier } from "./store";
 
 const SCENE_VIDEO = "https://d2ol7oe51mr4n9.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/175fbbcd-e50a-480c-bab2-ca16d4678322.mp4";
@@ -44,6 +46,8 @@ export function renderChat(main: HTMLElement, ctx: Ctx, chat: Chat | undefined):
   connectionsRef = ctx.state.connections;
   setConnections(ctx.state.connections);
   const config = chat?.config ?? (draft = { ...structuredClone(ctx.state.config), ...(ctx.state.config.think === 4 ? { think: 0 } : {}) });
+  // with Aeronus switched off in Settings, new chats are always Focus
+  if (!chat && !ctx.state.settings.teamMode) config.hub = "focus";
   const list = h("div", { class: "thread" });
   const scroller = h("div", { class: "chat-scroll" }, list);
   view = { chatId: chat?.id, list, scroller, ctx };
@@ -105,7 +109,7 @@ export function renderChat(main: HTMLElement, ctx: Ctx, chat: Chat | undefined):
     let greeting = 0;
     const paint = (animate: boolean) => {
       const hub = hubOf(config);
-      const pool = GREETINGS[hub][navigator.language.toLowerCase().startsWith("ru") ? "ru" : "en"];
+      const pool = GREETINGS[hub][getLang()];
       title.textContent = pool[Math.floor(Math.random() * pool.length)];
       title.classList.add("waiting");
       // a fresh line from the model each time a new chat opens; the local one stays if it's slow
@@ -328,6 +332,10 @@ function tierAgent(ctx: Ctx, tier: Tier, think = 0): Agent {
   const t = TIERS[tier];
   // skills switched on in Settings apply to every Focus chat
   const global = allSkills(ctx.state).filter((k) => ctx.state.settings.skills.includes(k.id) && k.instructions.trim()).map((k) => `Skill — ${k.name}: ${k.instructions.trim()}`);
+  // what the user told Focus about themselves in Settings → Account
+  const me = displayUser();
+  const about = me ? profileOf(me.id).about?.trim() : "";
+  if (me) global.push(`The user's name is ${me.name}.${about ? ` About them, in their words: ${about}` : ""}`);
   return { id: `tier-${tier}`, name: t.name, connectionId: conn.id, kind: "chat", model: `tier:${tier}:${think}`, effort: "", role: [`${PERSONA}\n\n${t.role}`, ...global].join("\n\n"), color: TIER_COLORS[tier], enabled: true, skills: [], avatar: "", prefer: choiceModel(ctx.state.settings.focus) };
 }
 
@@ -918,8 +926,10 @@ function openPopover(anchor: HTMLElement, content: HTMLElement): void {
   anchor.closest(".app-root")!.append(popover);
   // keep the whole popover on screen, whatever its real width
   // offsetWidth ignores the opening scale animation, so this is the real size
-  const w = popover.offsetWidth;
-  popover.style.left = `${Math.max(12, Math.min(r.left, innerWidth - w - 12))}px`;
+  const w = Math.min(popover.offsetWidth, innerWidth - 24);
+  popover.style.maxWidth = `${innerWidth - 24}px`;
+  // on a phone the sheet sits in the middle, clear of both edges
+  popover.style.left = `${innerWidth < 520 ? Math.round((innerWidth - w) / 2) : Math.max(12, Math.min(r.left, innerWidth - w - 12))}px`;
 }
 
 // a phone's address bar sliding away resizes the page; only a real change of width (a turned screen) closes the menu
@@ -1045,8 +1055,12 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onH
     rec.onerror = (e: any) => {
       if (e.error === "no-speech" || e.error === "aborted") return;
       wanted = false;
-      if (e.error === "not-allowed" || e.error === "service-not-allowed") alert(tr("Allow the microphone for this site to dictate. If Focus is open inside another page, open it in its own tab."));
-      else alert(tr("Voice input failed. Check the internet connection and try again."));
+      if (e.error === "not-allowed") {
+        alert(tr("Allow the microphone for this site to dictate. If Focus is open inside another page, open it in its own tab."));
+        return;
+      }
+      // the browser has the API but no working speech service (common on Android browsers): record instead
+      useRecorder();
     };
     rec.onend = () => {
       rec = undefined;
@@ -1060,31 +1074,91 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onH
           wanted = false;
         }
       }
-      micBtn.classList.remove("on");
+      if (!recording) micBtn.classList.remove("on");
       sync();
     };
     let started = false;
     rec.onstart = () => (started = true);
     const current = rec;
     rec.start();
-    // some embedded views never start the recogniser and never say why
+    // some browsers never start the recogniser and never say why: record instead
     setTimeout(() => {
       if (!started && rec === current && wanted) {
         wanted = false;
         stopVoice();
-        alert(tr("Allow the microphone for this site to dictate. If Focus is open inside another page, open it in its own tab."));
+        useRecorder();
       }
-    }, 6000);
+    }, 4000);
   };
-  micBtn.addEventListener("click", () => {
-    if (!Rec) {
+
+  // the fallback: record, then the server transcribes
+  let recording: Recording | undefined;
+  let transcribing = false;
+  const prefersRecorder = () => {
+    try {
+      return localStorage.getItem("focus.voice") === "rec";
+    } catch {
+      return false;
+    }
+  };
+  const useRecorder = () => {
+    try {
+      localStorage.setItem("focus.voice", "rec");
+    } catch {
+      // remembered for this visit only
+    }
+    void startRecorder();
+  };
+  const finishRecorder = async () => {
+    const r = recording;
+    if (!r) return;
+    recording = undefined;
+    transcribing = true;
+    micBtn.classList.remove("on");
+    micBtn.classList.add("busy");
+    micBtn.title = tr("Recognising…");
+    try {
+      const text = (await r.finish()).trim();
+      if (text) {
+        input.value = (input.value ? input.value.replace(/\s*$/, " ") : "") + text;
+        sync();
+        input.focus();
+      }
+    } catch (error) {
+      alert(error instanceof Error ? error.message : String(error));
+    } finally {
+      transcribing = false;
+      micBtn.classList.remove("busy");
+      micBtn.title = tr("Voice input");
+    }
+  };
+  const startRecorder = async () => {
+    if (import.meta.env.VITE_ARTIFACT === "1") {
+      alert(tr("Voice input works on the website: open focus-agents.vercel.app."));
+      return;
+    }
+    if (!canRecord()) {
       alert(tr("Voice input isn't supported in this browser. Try Chrome, Edge or Safari."));
       return;
     }
+    try {
+      recording = await startRecording(() => void finishRecorder());
+      micBtn.classList.add("on");
+    } catch {
+      recording = undefined;
+      micBtn.classList.remove("on");
+      alert(tr("Allow the microphone for this site to dictate. If Focus is open inside another page, open it in its own tab."));
+    }
+  };
+
+  micBtn.addEventListener("click", () => {
+    if (transcribing) return;
+    if (recording) return void finishRecorder();
     if (wanted) {
       wanted = false;
       return stopVoice();
     }
+    if (!Rec || prefersRecorder()) return void startRecorder();
     base = input.value ? input.value.replace(/\s*$/, " ") : "";
     finalText = "";
     wanted = true;
@@ -1094,12 +1168,15 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onH
     } catch {
       wanted = false;
       rec = undefined;
+      useRecorder();
     }
   });
 
   const submit = () => {
     wanted = false;
     stopVoice();
+    recording?.cancel();
+    recording = undefined;
     if (chat && runs.has(chat.id)) {
       runs.get(chat.id)?.abort();
       return;
@@ -1152,6 +1229,7 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onH
   const opts = h("div", { class: "bar-opts" });
 
   // how hard Focus thinks: a slider behind a small chip
+  let paintModelChip: (() => void) | undefined;
   const thinkChip = h("button", { class: "chip-btn think-chip", type: "button", "data-popover": "think", "aria-haspopup": "dialog", title: "How hard Focus thinks" });
   const paintThink = () => {
     const lvl = config.think ?? 0;
@@ -1162,6 +1240,7 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onH
       h("span", { class: "think-short", "aria-hidden": "true" }, THINK[lvl].short ?? THINK[lvl].name),
     );
     thinkChip.setAttribute("aria-label", `Thinking: ${THINK[lvl].name}`);
+    paintModelChip?.();
   };
   const thinkMenu = () => {
     const hint = h("p", { class: "think-hint" }, THINK[config.think ?? 0].hint);
@@ -1265,6 +1344,55 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onH
       ),
     );
 
+  // one chip holds every choice (hub, agent, tier, thinking, team) so the composer stays quiet
+  const modelChip = h("button", { class: "chip-btn model-chip", type: "button", "data-popover": "model", "aria-haspopup": "dialog", title: "Model and settings for this chat" });
+  paintModelChip = () => {
+    const hub = hubOf(config);
+    const fa = hub === "focus" ? focusAgentOf(ctx, config) : undefined;
+    if (hub === "focus") {
+      const lvl = config.think ?? 0;
+      modelChip.replaceChildren(
+        fa ? agentMascot(fa.color, 16) : focusMark(15),
+        h("span", { class: `model-chip-name${fa ? "" : ` tier-${config.tier}`}` }, fa ? fa.name || "Agent" : TIERS[config.tier].name),
+        ...(!fa && lvl ? [h("span", { class: "model-chip-sub" }, THINK[lvl].short ?? THINK[lvl].name)] : []),
+        icon("chevron", 13),
+      );
+    } else {
+      const team = teamOf(ctx, config);
+      const lead = leadOf(ctx, config, team);
+      const shown = config.mode === "solo" ? (lead ? [lead] : []) : team;
+      modelChip.replaceChildren(
+        h("span", { class: "avatars" }, ...shown.slice(0, 3).map((a) => agentAvatar("xs", a, connectionOf(ctx.state, a)?.provider))),
+        h("span", { class: "model-chip-name" }, modeInfo(config.mode).name),
+        icon("chevron", 13),
+      );
+    }
+  };
+  const modelSheet = (): HTMLElement => {
+    const hub = hubOf(config);
+    const fa = hub === "focus" ? focusAgentOf(ctx, config) : undefined;
+    const sheet = h("div", { class: "menu model-sheet" });
+    if (ctx.state.settings.teamMode || hub === "aeronus") sheet.append(hubSwitch);
+    if (hub === "focus") {
+      // the agent list only shows up once the user has built an agent
+      if (ctx.state.focusAgents.length) sheet.append(...agentMenu().childNodes);
+      if (!fa) sheet.append(h("div", { class: "menu-title" }, "Model"), tierSeg, ...thinkMenu().childNodes);
+    } else {
+      sheet.append(
+        ...modeMenu().childNodes,
+        h(
+          "button",
+          { class: "menu-item", type: "button", onclick: () => openPopover(modelChip, teamMenu()) },
+          icon("agents", 18),
+          h("span", { class: "menu-text" }, h("strong", {}, "Team"), h("small", {}, "Choose who works on the task")),
+          icon("chevron", 14),
+        ),
+      );
+    }
+    return sheet;
+  };
+  modelChip.addEventListener("click", () => openPopover(modelChip, modelSheet()));
+
   const renderBar = () => {
     const hub = hubOf(config);
     const fa = hub === "focus" ? focusAgentOf(ctx, config) : undefined;
@@ -1308,11 +1436,10 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onH
       opts.classList.add("swap");
     }
     shownHub = hub;
+    paintModelChip();
     bar.replaceChildren(
       h("button", { class: "chip-btn icon-only", type: "button", "data-popover": "plus", "aria-haspopup": "dialog", title: "Attach files or create something", "aria-label": "Attach files or create", onclick: (e: Event) => openPopover(e.currentTarget as HTMLElement, plusMenu()) }, icon("plus")),
-      hubSwitch,
-      ...(hub === "focus" && !fa ? [thinkChip] : []),
-      opts,
+      modelChip,
       h("span", { class: "spacer" }),
       sendBtn,
     );
@@ -1469,7 +1596,7 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onH
   renderBar();
   sync();
   renderFiles();
-  const composer = h("div", { class: "composer" }, createPill, files, micBtn, input, caption, bar, fileInput);
+  const composer = h("div", { class: "composer" }, createPill, files, micBtn, input, bar, fileInput);
   composer.addEventListener("dragover", (e) => {
     e.preventDefault();
     composer.classList.add("drop");

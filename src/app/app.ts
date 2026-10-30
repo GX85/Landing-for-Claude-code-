@@ -1,5 +1,5 @@
 import { trackViewport } from "./viewport";
-import { signedInUser, signOut } from "./signin";
+import { avatarEl, displayUser, rememberAccount } from "./account";
 import { renderMyAgents } from "./myagents";
 import { renderSettings } from "./settings";
 import { typeReveal } from "./typing";
@@ -152,7 +152,8 @@ function renderSidebar(): void {
   );
   renderChats();
   const ready = state.agents.filter((a) => isReady(state, a)).length;
-  const user = signedInUser();
+  const user = displayUser();
+  if (user) rememberAccount();
   footEl.replaceChildren(
     h(
       "a",
@@ -171,10 +172,19 @@ function renderSidebar(): void {
     ...(user
       ? [h(
           "div",
-          { class: "side-user" },
-          user.avatar ? h("img", { src: user.avatar, alt: "", width: 22, height: 22 }) : h("span", { class: "avatar xs", style: "background:#1d1d1d" }, user.name.slice(0, 1).toUpperCase()),
+          {
+            class: "side-user",
+            role: "button",
+            tabindex: 0,
+            title: "Account settings",
+            onclick: () => {
+              closeDrawer();
+              ctx.go({ name: "settings" });
+            },
+          },
+          avatarEl(user, 26),
           h("span", { class: "side-user-name", title: user.email ?? user.name }, user.name),
-          h("button", { class: "btn-ghost sm", type: "button", onclick: () => void signOut() }, "Sign out"),
+          icon("settings", 16),
         )]
       : []),
   );

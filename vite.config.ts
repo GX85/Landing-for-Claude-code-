@@ -7,7 +7,7 @@ function devApi(): Plugin {
     name: "focus-dev-api",
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
-        const match = req.url?.match(/^\/api\/(run|models|job|media|auth|web)(\?.*)?$/);
+        const match = req.url?.match(/^\/api\/(run|models|job|media|auth|web|transcribe)(\?.*)?$/);
         if (!match) return next();
         const abort = new AbortController();
         res.on("close", () => abort.abort());

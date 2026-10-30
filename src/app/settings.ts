@@ -1,5 +1,6 @@
 import type { Ctx } from "./app";
 import { setToolsConfig } from "./tools";
+import { accountSection } from "./account";
 import { h, pageHead, slideSeg } from "./dom";
 import { getLang, setLang, type Lang } from "../i18n";
 import { openRouterCatalog, resetCatalog } from "./pages";
@@ -232,18 +233,17 @@ function skillsSection(ctx: Ctx, rerender: () => void): HTMLElement {
   );
 }
 
+type Tab = "general" | "models" | "tools" | "skills";
+let tab: Tab = "general";
+
 export function renderSettings(main: HTMLElement, ctx: Ctx): void {
   const rerender = () => renderSettings(main, ctx);
   const inArtifact = import.meta.env.VITE_ARTIFACT === "1";
-  main.replaceChildren(
-    pageHead("Settings"),
-    h(
-      "div",
-      { class: "page" },
-      h(
-        "div",
-        { class: "page-inner" },
-        h("p", { class: "page-lede" }, inArtifact ? "In this Artifact chats run through Claude, so the model choice below applies to the full app at focus-agents.vercel.app." : "Choose which model answers your chats. Change it any time; it applies to new messages."),
+  const body = h("div", { class: "set-tab-body" });
+  const paint = () => {
+    if (tab === "general")
+      body.replaceChildren(
+        accountSection(rerender),
         h(
           "section",
           { class: "card set-card" },
@@ -251,16 +251,53 @@ export function renderSettings(main: HTMLElement, ctx: Ctx): void {
           slideSeg<Lang>([{ value: "en", label: "English" }, { value: "ru", label: "Русский" }], getLang(), (v) => setLang(v), "Interface language"),
         ),
         h(
+          "section",
+          { class: "card set-card" },
+          h("h3", { class: "set-title" }, "Chat"),
+          row(
+            "Aeronus team",
+            "Put Claude, GPT, Gemini and your other agents on one task. When it's on, switch between Focus and Aeronus from the model button in the chat.",
+            sw(!!ctx.state.settings.teamMode, "Aeronus team", (on) => {
+              ctx.state.settings.teamMode = on;
+              if (!on) ctx.state.config.hub = "focus";
+              ctx.persist();
+            }),
+          ),
+        ),
+      );
+    else if (tab === "models")
+      body.replaceChildren(
+        h("p", { class: "page-lede" }, inArtifact ? "In this Artifact chats run through Claude, so the model choice below applies to the full app at focus-agents.vercel.app." : "Choose which model answers your chats. Change it any time; it applies to new messages."),
+        h(
           "div",
           { class: "set-update" },
           h("button", { class: "btn", type: "button", onclick: () => void updateModels(rerender) }, "Update models"),
           h("span", { class: "field-hint" }, updateNote || (liveModelsAt() ? "Lists are up to date." : "Focus keeps its model lists fresh: retired models drop out and new free ones join.")),
         ),
-        toolsSection(ctx),
-        skillsSection(ctx, rerender),
         section(ctx, "focus", "Focus chat", "The single assistant (Storm, GEN, Clorus) answers with this model.", rerender),
         section(ctx, "aeronus", "Aeronus chat", "Every team member that runs on Focus's free connection answers with this model. Agents with their own key keep theirs.", rerender),
-      ),
-    ),
+      );
+    else if (tab === "tools") body.replaceChildren(toolsSection(ctx));
+    else body.replaceChildren(skillsSection(ctx, rerender));
+  };
+  const tabs = slideSeg<Tab>(
+    [
+      { value: "general", label: "General" },
+      { value: "models", label: "Models" },
+      { value: "tools", label: "Devices" },
+      { value: "skills", label: "Skills" },
+    ],
+    tab,
+    (v) => {
+      tab = v;
+      paint();
+      body.classList.remove("swap");
+      void body.offsetWidth;
+      body.classList.add("swap");
+    },
+    "Settings section",
   );
+  tabs.classList.add("set-tabs");
+  paint();
+  main.replaceChildren(pageHead("Settings"), h("div", { class: "page" }, h("div", { class: "page-inner" }, tabs, body)));
 }

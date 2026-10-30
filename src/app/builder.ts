@@ -7,6 +7,7 @@
  * out by a hand-made template, so they always look right.
  */
 
+import { sandboxed } from "./sandbox";
 import type { ChatTurn } from "./api";
 import { closestGame, exampleGameJs, renderCustomGame, renderGame, type GameConfig } from "./templates/games";
 import { themeNames } from "./templates/kit";
@@ -131,7 +132,7 @@ export function validateHtml(html: string, ms = 3200): Promise<string[]> {
       'var ce=console.error;console.error=function(){s("console.error: "+Array.prototype.join.call(arguments," "));return ce.apply(console,arguments)};' +
       'setTimeout(function(){try{var b=document.querySelector("button");if(b)b.click();["Enter"," ","ArrowRight","ArrowUp","ArrowLeft","KeyW"].forEach(function(k){var ev=new KeyboardEvent("keydown",{key:k.length===1?k:k.replace("Key","").toLowerCase(),code:k,bubbles:true});document.dispatchEvent(ev);window.dispatchEvent(ev)});' +
       'var c=document.elementFromPoint(innerWidth/2,innerHeight/2);if(c){["pointerdown","mousedown","pointerup","mouseup","click"].forEach(function(t){c.dispatchEvent(new MouseEvent(t,{bubbles:true,clientX:innerWidth/2,clientY:innerHeight/2}))})}}catch(e){s(e&&e.message||e)}},900)})();</script>';
-    const doc = /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, (m) => m + reporter) : reporter + html;
+    const doc = sandboxed(html, reporter);
     let frame: HTMLIFrameElement;
     const onMessage = (e: MessageEvent) => {
       if (e.source === frame?.contentWindow && (e.data as { focusCheck?: number })?.focusCheck) errors.push((e.data as { msg: string }).msg);

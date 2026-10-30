@@ -1,4 +1,5 @@
 import { Marked } from "marked";
+import { sandboxed } from "./sandbox";
 import DOMPurify from "dompurify";
 
 const marked = new Marked({ gfm: true, breaks: true });
@@ -63,7 +64,7 @@ export function renderMarkdown(el: HTMLElement, source: string): void {
         frame.className = `code-preview${full ? " full" : ""}`;
         frame.title = "Preview";
         frame.setAttribute("sandbox", "allow-scripts allow-modals allow-pointer-lock");
-        frame.srcdoc = source;
+        frame.srcdoc = sandboxed(source);
         wrap.append(frame);
         if (full) {
           const close = document.createElement("button");

@@ -164,47 +164,29 @@
   letter-spacing: 0.01em;
 }
 
-/* Aeronus: pixel type with a pixel mark */
-.partner-aeronus span {
-  position: relative;
-  padding-left: 30px;
+/* OnlyGuests: a newspaper masthead */
+.partner-guests span {
+  font-family: "Playfair Display", Georgia, "Times New Roman", serif;
+  font-size: 46px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+
+/* FlowTouch: pixel type next to a pixel robot arm */
+.partner-flow {
+  gap: 12px;
+}
+
+.partner-flow span {
   font-family: "Pixelify Sans", monospace;
   font-size: 40px;
   font-weight: 700;
 }
 
-.partner-aeronus span::before {
-  content: "";
-  position: absolute;
-  top: 50%;
-  left: 0;
-  width: 6px;
-  height: 6px;
-  margin-top: -9px;
-  background: currentColor;
-  box-shadow: 6px 0 currentColor, 12px 0 currentColor, 6px -6px currentColor, 0 6px currentColor, 12px 6px currentColor, 6px 12px currentColor;
-}
-
-/* Clorus: a calm serif with a half-filled dot */
-.partner-clorus span {
-  position: relative;
-  padding-left: 26px;
-  font-family: "Instrument Serif", Georgia, serif;
-  font-size: 56px;
-  letter-spacing: -0.015em;
-}
-
-.partner-clorus span::before {
-  content: "";
-  position: absolute;
-  top: 50%;
-  left: 0;
-  width: 16px;
-  height: 16px;
-  margin-top: -6px;
-  border: 2px solid currentColor;
-  border-radius: 50%;
-  background: linear-gradient(180deg, transparent 50%, currentColor 50%);
+.robo-arm {
+  width: 40px;
+  height: 40px;
+  shape-rendering: crispEdges;
 }
 
 /* ---------- intro ---------- */
@@ -1464,12 +1446,17 @@
     font-size: 50px;
   }
 
-  .partner-aeronus span {
+  .partner-guests span {
+    font-size: 34px;
+  }
+
+  .partner-flow span {
     font-size: 30px;
   }
 
-  .partner-clorus span {
-    font-size: 42px;
+  .robo-arm {
+    width: 30px;
+    height: 30px;
   }
 
   .site-foot-inner {
@@ -2370,4 +2357,29 @@
 .landing.dim .half {
   opacity: 0;
   transition: opacity 0.35s ease;
+}
+
+/* phones: the section links give way so language, theme and "Open app" always fit */
+@media (max-width: 560px) {
+  .nav > .nav-group:first-child a:not([href="#tiers"]):not([href="#faq"]) {
+    display: none;
+  }
+
+  .nav-group {
+    gap: 1.1em;
+  }
+
+  .nav .nav-app {
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 370px) {
+  .nav > .nav-group:first-child {
+    display: none;
+  }
+
+  .nav {
+    justify-content: flex-end;
+  }
 }

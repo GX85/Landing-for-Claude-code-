@@ -1810,3 +1810,257 @@ html.dark .app-root .md code {
     gap: 4px;
   }
 }
+
+/* ---------- settings tabs and account ---------- */
+
+.set-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin-bottom: 14px;
+}
+
+.set-tab-body {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.set-tab-body.swap {
+  animation: tab-in 0.35s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+@keyframes tab-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.acct-avatar {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  border-radius: 50%;
+  object-fit: cover;
+  color: #fff;
+  font-weight: 650;
+}
+
+.acct-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 6px 0 14px;
+  min-width: 0;
+}
+
+.acct-pic {
+  position: relative;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+}
+
+.acct-pic-edit {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--btn, #1d1d1d);
+  color: #fff;
+  box-shadow: 0 0 0 2px var(--card, #fff);
+}
+
+.acct-id {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.acct-id strong {
+  font-size: 18px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acct-id small {
+  color: var(--ink-3, #888);
+  overflow-wrap: anywhere;
+}
+
+.acct-colors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.acct-color {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 0 0 1px rgba(127, 127, 127, 0.3);
+  transition: transform 0.2s;
+}
+
+.acct-color.on {
+  box-shadow: 0 0 0 2px var(--card, #fff), 0 0 0 4px currentColor;
+  transform: scale(1.08);
+}
+
+.acct-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.acct-sub {
+  margin: 18px 0 4px;
+  font-size: 13px;
+  color: var(--ink-3, #888);
+  font-weight: 600;
+}
+
+.acct-row {
+  justify-content: flex-start;
+}
+
+.acct-row .set-row-text {
+  flex: 1;
+}
+
+.side-user {
+  cursor: pointer;
+}
+
+/* ---------- the model chip and its sheet ---------- */
+
+.model-chip {
+  max-width: 62vw;
+  min-width: 0;
+}
+
+.model-chip-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.model-chip-sub {
+  color: var(--ink-3, #888);
+  font-size: 12px;
+}
+
+.model-sheet {
+  width: 100%;
+  min-width: 0;
+}
+
+.model-sheet .tier-seg {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.model-sheet .hub-switch {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.model-sheet .think-range {
+  width: calc(100% - 12px);
+  max-width: calc(100% - 12px);
+}
+
+.set-seg button,
+.slide-seg button {
+  white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.model-sheet .hub-switch,
+.model-sheet .tier-seg {
+  display: grid;
+  width: 100%;
+  margin: 4px 0 8px;
+}
+
+.model-sheet .hub-opt,
+.model-sheet .tier-opt {
+  height: 34px;
+}
+
+/* nothing inside the model sheet may be wider than the sheet */
+.model-sheet {
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
+
+.model-sheet > * {
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.model-sheet .think-range {
+  width: calc(100% - 12px) !important;
+}
+
+.model-sheet .think-marks {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  width: 100%;
+}
+
+.model-sheet .think-marks button {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.popover:has(.model-sheet) {
+  overflow-x: hidden;
+}
+
+.model-sheet .think-marks {
+  padding: 0 4px;
+}
+
+/* a small sheet: fits any phone with room to spare */
+.popover:has(.model-sheet) {
+  width: min(292px, calc(100vw - 40px));
+  padding: 8px 10px;
+}
+
+.model-sheet .think-marks {
+  padding: 0;
+}
+
+.model-sheet .think-marks button {
+  padding: 4px 0;
+  font-size: 11px;
+  text-align: center;
+}
+
+.model-sheet .think-hint {
+  font-size: 12.5px;
+  margin: 4px 2px 2px;
+}
+
+.model-sheet .tier-opt,
+.model-sheet .hub-opt {
+  padding: 0 4px;
+}

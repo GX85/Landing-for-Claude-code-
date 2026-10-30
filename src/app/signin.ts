@@ -91,7 +91,7 @@ export function renderSignIn(el: HTMLElement, a: AuthInfo, onDone: () => void): 
   const note = h("p", { class: "signin-note", role: "status" });
   if (new URLSearchParams(location.search).get("auth") === "failed") note.textContent = "Sign-in didn't finish. Try again.";
 
-  const emailInput = h("input", { type: "email", placeholder: "you@example.com", autocomplete: "email", required: true, "aria-label": "Email" });
+  const emailInput = h("input", { type: "email", placeholder: "you@example.com", autocomplete: "email", required: true, "aria-label": "Email", value: new URLSearchParams(location.search).get("email") ?? "" });
   const codeInput = h("input", { inputmode: "numeric", autocomplete: "one-time-code", maxlength: 6, placeholder: "6-digit code", "aria-label": "Code from the email", pattern: "[0-9]{6}" });
   const emailBtn = h("button", { class: "signin-btn primary", type: "submit" }, "Email me a code");
   let sentTo = "";
