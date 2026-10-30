@@ -273,9 +273,10 @@ const liveTier = (listed: string[]): string[] => {
 const visionModels = (): string[] => {
   const own = userConnections.some((c) => c.provider === "openrouter" && c.apiKey);
   return [
-    ...(own || serverOpenRouter !== false ? ["google/gemma-4-31b-it:free", "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"].map((m) => `openrouter/${m}`) : []),
-    "ollama/gemma4:31b",
-    "ollama/kimi-k2.6",
+    // Gemma 4 on Ollama answers fastest; then the strongest free vision models on OpenRouter
+    ...(usable("gemma4:31b") ? ["ollama/gemma4:31b"] : []),
+    ...(own || serverOpenRouter !== false ? ["nvidia/nemotron-3.5-super-vl:free", "thinkingmachines/inkling:free", "google/gemma-4-31b-it:free"].map((m) => `openrouter/${m}`) : []),
+    ...(usable("kimi-k2.6") ? ["ollama/kimi-k2.6"] : []),
   ];
 };
 
@@ -298,7 +299,9 @@ export async function loadWorkingModels(): Promise<string[]> {
   }
 }
 
-const usable = (id: string) => !ollamaWorking || ollamaWorking.includes(id);
+/** Until the server's test comes back, only the models known to run on the free plan are tried. */
+const FREE_PLAN = ["gpt-oss:120b", "nemotron-3-ultra", "nemotron-3-super", "gemma4:31b", "gpt-oss:20b", "nemotron-3-nano:30b"];
+const usable = (id: string) => (ollamaWorking ? ollamaWorking.includes(id) : FREE_PLAN.includes(id));
 
 /** What kind of message this is, so the model that is best at it goes first. */
 type Task = "code" | "reason" | "creative" | "chat";
@@ -309,10 +312,11 @@ function taskOf(text: string): Task {
   if (/стих|рассказ|сказк|сочин|придумай|историю|слоган|poem|story|lyrics|slogan|tagline|fiction|creative|joke|шутк/i.test(t)) return "creative";
   return "chat";
 }
+// the strongest first; the paid-plan ones are skipped until the key can run them
 const TASK_MODELS: Record<Task, string[]> = {
-  code: ["gpt-oss:120b", "nemotron-3-ultra", "nemotron-3-super"],
-  reason: ["nemotron-3-ultra", "gpt-oss:120b", "nemotron-3-super"],
-  creative: ["gemma4:31b", "gpt-oss:120b", "nemotron-3-ultra"],
+  code: ["kimi-k2.7-code", "deepseek-v4-pro", "gpt-oss:120b", "nemotron-3-ultra"],
+  reason: ["deepseek-v4-pro", "kimi-k3", "nemotron-3-ultra", "gpt-oss:120b"],
+  creative: ["kimi-k3", "gemma4:31b", "gpt-oss:120b"],
   chat: [],
 };
 
@@ -330,7 +334,7 @@ const tierModels = (tier: Tier) => {
   return [
     // the site's Ollama Cloud key: big models that answer in about a second
     ...(serverPool > 0 && ollamaUp ? t.ollama.filter(usable).map((m) => `ollama/${m}`) : []),
-    ...(own || serverOpenRouter !== false ? liveTier(t.or).slice(0, 2).map((m) => `openrouter/${m}`) : []),
+    ...(own || serverOpenRouter !== false ? liveTier(t.or).slice(0, 3).map((m) => `openrouter/${m}`) : []),
     // the server's own free-tier keys (Groq, Gemini…) are faster and roomier than the keyless hosts
     ...(serverPool > 0 ? ["server/pool"] : []),
     ...t.free,
@@ -400,8 +404,10 @@ async function callTier(spec: string, agent: Agent, conn: Connection, system: st
   let models = tierModels(tier);
   // the model that is best at this kind of question goes first (Storm keeps its fast ones)
   if (tier !== "storm" && serverPool > 0 && ollamaUp) {
-    const first = TASK_MODELS[taskOf(ask)].filter(usable).map((m) => `ollama/${m}`);
-    models = [...new Set([...first, ...models])];
+    const task = taskOf(ask);
+    const first = TASK_MODELS[task].filter(usable).map((m) => `ollama/${m}`);
+    const coder = task === "code" && serverOpenRouter !== false ? ["openrouter/poolside/laguna-s-2.1:free"] : [];
+    models = [...new Set([...first, ...coder, ...models])];
   }
   // a picture is attached: only models that can see go first; the text-only free hosts would ignore it
   const sees = messages.some((m) => m.images?.length);
