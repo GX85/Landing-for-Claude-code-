@@ -41,6 +41,8 @@ async function apply(route: Route): Promise<void> {
     const api = await import("./app/api");
     api.setServerPool(auth.pool ?? 0);
     api.warmModels();
+    // which of the server's big models answer right now (the server tests them and remembers for 30 min)
+    if (auth.access?.granted !== false && (!auth.enabled || auth.user)) void api.loadWorkingModels();
   }
   if (auth.access?.required && !auth.access.granted) {
     hideLanding();

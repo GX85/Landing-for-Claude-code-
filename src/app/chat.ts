@@ -925,19 +925,9 @@ addEventListener("resize", () => {
   popoverWidth = innerWidth;
 });
 
-/** The one-line note under the message box that follows whatever is selected. */
-function captionFor(ctx: Ctx, config: ChatConfig, hub: Hub, fa?: FocusAgent): string {
-  if (hub === "aeronus") return `Aeronus · ${modeInfo(config.mode).name}: ${modeInfo(config.mode).short}`;
-  if (fa) return `${fa.name || "Your agent"} · your own agent`;
-  const t = TIERS[config.tier];
-  const level = config.think ? ` · ${THINK[config.think].name}` : "";
-  return `${t.name} · ${t.tag}${level}`;
-}
-
 function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onHubChange?: () => void): HTMLElement {
   const input = h("textarea", { rows: 1, placeholder: "Message your team…", "aria-label": "Message" });
   const files = h("div", { class: "composer-files" });
-  const caption = h("div", { class: "cap-line", "aria-live": "polite" });
   const sendBtn = h("button", { class: "send-btn", type: "button" });
   const fileInput = h("input", { type: "file", multiple: true, hidden: true, accept: ACCEPT });
   let reading = 0;
@@ -1393,7 +1383,6 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onH
     for (const b of hubSwitch.querySelectorAll<HTMLElement>(".hub-opt")) b.setAttribute("aria-checked", String(b.dataset.hub === hub));
     for (const b of tierSeg.querySelectorAll<HTMLElement>(".tier-opt")) b.setAttribute("aria-checked", String(b.dataset.tier === config.tier));
     void typePlaceholder(input, create ? CREATE.find((c) => c.kind === create)!.ask : hub === "focus" ? `Ask ${fa ? fa.name || "your agent" : TIERS[config.tier].name}…` : "Message your team…");
-    void handWrite(caption, captionFor(ctx, config, hub, fa));
     opts.replaceChildren(
       ...(hub === "focus"
         ? fa

@@ -10,6 +10,9 @@ import { allSkills, uid, type ModelChoice, type ModelSource, type Skill } from "
 /** Settings: which model answers in Focus and which in Aeronus. */
 
 let ollamaModels: string[] | undefined;
+let ollamaSpeed = new Map<string, number>();
+/** The models Focus itself prefers: the smartest that answer fast. */
+const BEST = new Set(["gpt-oss:120b", "nemotron-3-ultra", "gemma4:31b"]);
 let updateNote = "";
 let ollamaLoading = false;
 const OLLAMA_FALLBACK = ["gpt-oss:120b", "gpt-oss:20b"];
@@ -35,10 +38,12 @@ function ollamaCatalog(onLoad: () => void): string[] {
   if (import.meta.env.VITE_ARTIFACT === "1") return (ollamaModels = OLLAMA_FALLBACK);
   if (!ollamaLoading) {
     ollamaLoading = true;
-    fetch("/api/models?ollama=1", { cache: "no-store" })
+    fetch("/api/models?ollama=1", { method: "POST", cache: "no-store" })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error("no list"))))
-      .then((d: { models?: string[] }) => {
-        ollamaModels = d.models?.length ? d.models : OLLAMA_FALLBACK;
+      .then((d: { models?: string[]; details?: { id: string; ms: number }[] }) => {
+        ollamaSpeed = new Map((d.details ?? []).map((x) => [x.id, x.ms]));
+        // best ones first, then the rest by speed
+        ollamaModels = d.models?.length ? [...d.models.filter((m) => BEST.has(m)), ...d.models.filter((m) => !BEST.has(m))] : OLLAMA_FALLBACK;
         onLoad();
       })
       .catch(() => {
@@ -50,9 +55,9 @@ function ollamaCatalog(onLoad: () => void): string[] {
 }
 
 const SOURCES: { id: ModelSource; label: string; hint: string }[] = [
-  { id: "auto", label: "Auto", hint: "Focus picks the best free model for each message." },
+  { id: "auto", label: "Auto", hint: "Recommended. Focus picks the best model for each message: code and maths go to the strongest reasoners, stories to the most fluent writer, and a model that fails is skipped for a few minutes." },
   { id: "openrouter", label: "OpenRouter", hint: "Any of about 460 OpenRouter models. Free ones cost nothing; others use your OpenRouter key from Connections." },
-  { id: "ollama", label: "Ollama", hint: "Ollama Cloud models, served through Focus. If one is busy, Focus falls back to its free models." },
+  { id: "ollama", label: "Ollama", hint: "Ollama Cloud models, served through Focus. Only the ones that answer right now are listed, with their response time; ★ marks the smartest fast ones." },
 ];
 
 function section(ctx: Ctx, key: "focus" | "aeronus", title: string, lede: string, rerender: () => void): HTMLElement {
@@ -115,7 +120,11 @@ function section(ctx: Ctx, key: "focus" | "aeronus", title: string, lede: string
                 },
               },
               h("span", {}, m.name),
-              choice.source === "openrouter" ? (m.free ? h("em", { class: "ma-free" }, "free") : h("em", {}, "your key")) : null,
+              choice.source === "openrouter"
+                ? m.free
+                  ? h("em", { class: "ma-free" }, "free")
+                  : h("em", {}, "your key")
+                : h("em", { class: BEST.has(m.id) ? "ma-free" : "" }, `${BEST.has(m.id) ? "★ best · " : ""}${ollamaSpeed.has(m.id) ? `${(ollamaSpeed.get(m.id)! / 1000).toFixed(1)} s` : ""}`),
             ),
           ),
       );

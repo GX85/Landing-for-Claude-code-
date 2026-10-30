@@ -1,94 +1,89 @@
 # Focus
 
-**Focus** puts different AI models and agents to work as one team, in a chat that feels like ChatGPT or Claude:
-Claude, GPT, Gemini and Grok side by side, plus any OpenAI-compatible model, and video generators or autonomous
-agents (Manus, Jules…) through an HTTP endpoint.
+**Focus** is a free AI assistant by Team Swift. It talks like a person, answers in about a second, and builds
+games, websites, apps and presentations that run right in the chat. **Aeronus** is its team mode: Claude, GPT,
+Gemini, Grok and other agents working on one task together.
 
-Live: https://focus-agents.vercel.app — the landing at `/`, the app at `/app`. Both are one page: **Let's Focus**
-collapses the hero and opens the app without a reload.
+Live: https://focus-agents.vercel.app (landing at `/`, the app at `/app`, both in English and Russian).
 
-## The app
+## The assistant
 
-- **Chats** — history in the sidebar (search, rename, delete), streamed answers rendered as Markdown, follow-up
-  questions with full context, regenerate, stop, copy, export a chat as Markdown, text-file attachments.
-- **Eight modes** (`src/app/modes.ts`), picked in the message box:
-  - **Solo** — one-on-one chat with the agent you pick.
-  - **Compare** — every agent answers; answers side by side.
-  - **Council** — every agent answers, the lead merges them.
-  - **Vote** — every agent answers, the judge picks the best and says why.
-  - **Debate** — agents argue over N rounds, the judge gives a verdict.
-  - **Relay** — agents work in order, each improving the last; an HTTP agent placed last (e.g. a video generator)
-    gets the previous text as its prompt.
-  - **Review** — the author drafts, a reviewer critiques, the author revises until approved.
-  - **Planner** — the lead splits the task into subtasks, agents work in parallel, the lead assembles the result.
-- **Agents** — name, model, role (with presets), color, order; several agents can share one model.
-- **Connections** — API keys per provider, with a Test button that lists the models the key can use.
-- **Modes** — what each mode does, with a shortcut to start a chat in it.
+- **Three tiers**: **Storm** (fastest), **GEN** (everyday), **Clorus** (smartest, builds things). One chip in the
+  message box opens the model sheet: tier, thinking level (Auto, Quick, Think, Deep, UltraVision) and your own
+  agents.
+- **Model routing** (`src/app/api.ts`): Ollama Cloud models run with the site's key first (gpt-oss 120B,
+  Nemotron 3 Ultra and Super, Gemma 4 31B: first token in about a second), then free OpenRouter models, then
+  keyless hosts. The message type picks the order: code goes to gpt-oss 120B, maths and logic to Nemotron 3 Ultra,
+  stories and poems to Gemma 4. A model that fails is skipped for five minutes. The server tests which Ollama models
+  the key really runs (`/api/models?ollama=1`, cached for 30 minutes), and only those are used and listed in
+  Settings → Models.
+- **Builder** (`src/app/builder.ts`): games (a tested engine plus the model's game code, with a repair loop),
+  websites and apps (one HTML file, run in a sandbox and fixed until it starts without errors), presentations
+  (JSON → designed deck with title, bullets, two-column, stats, quote, steps, timeline, chart, cards and compare
+  slides; text shrinks to fit), and short animated films.
+- **Attachments**: photos, PDFs, text and code files, and video (six frames go to a vision model).
+- **Voice input**: the browser's speech recognition; where it is missing or broken, Focus records the voice and
+  `/api/transcribe` turns it into text.
+- **Tools** (Settings → Devices): web search and page reading with sources, location, and the device bridge.
 
-## Models, generators and agents
+## Aeronus
 
-- **Focus (free)** — built in, no key: chat on an open model (GPT-OSS 20B via Pollinations' anonymous tier) and
-  **Focus Image** (one free picture every 45 seconds). New users can chat right away. If the server has
-  `FOCUS_POLLINATIONS_KEY`, the built-in model uses it for more models and higher limits.
-- **Free with an account / on your machine** — **OpenRouter** (free models end in `:free`, listed first) and
-  **Ollama** (models on your own computer; the browser talks to it directly, start it with `OLLAMA_ORIGINS=*`).
-- **Chat models** — Anthropic (official SDK, refusal fallbacks on Claude 5-family models), OpenAI, Gemini, xAI,
-  any OpenAI-compatible endpoint.
-- **Image & video generators** — Gemini (Imagen, Veo), OpenAI images, Pollinations (dozens of video and image
-  models with one key), Luma Dream Machine, Replicate (any `owner/name` model).
-- **Autonomous agents** — Manus, Google Jules (works in a GitHub repo and opens a pull request), Devin, and any
-  HTTP endpoint of your own.
+Switched on in Settings → General. Eight ways to work (`src/app/modes.ts`): Solo, Compare, Council, Vote, Debate,
+Relay, Review and Planner. Members are your agents (Agents page) on your own keys (Connections page): Anthropic,
+OpenAI, Gemini, xAI, Mistral, Qwen, OpenRouter, Ollama, any OpenAI-compatible endpoint, and autonomous agents such
+as Manus, Jules and Devin.
 
-Each agent has a **type**: chat, image, video or autonomous agent. Media and agent jobs run through `/api/job`:
-`start` kicks one off and the browser polls until it finishes, so long renders and hour-long agent tasks don't
-depend on one serverless call. Files that need the key to download (Veo, Replicate, Pollinations) stream through
-`/api/media`.
+## Device bridge
 
-In **Relay**, an image/video/agent placed after chat agents gets the previous agent's text as its prompt — e.g.
-Claude writes a scene, Veo renders it. **Planner** can hand subtasks to generators and agents too.
+`public/focus-bridge.mjs` (Node 18+, also runs in Termux on Android) lets Focus work with your computer or phone:
+find and read files in one folder, open links, files and apps, use the clipboard, show notifications, type into the
+open window, take screenshots and, with `--shell`, run commands. It listens only on `127.0.0.1`, needs a key, and
+every action is approved by you in Focus.
 
-## Attachments
+```
+node focus-bridge.mjs                 # your home folder
+node focus-bridge.mjs --root ~/Documents --shell
+node focus-bridge.mjs --no-control    # files only
+```
 
-Images (PNG, JPEG, WebP, GIF — downscaled in the browser), PDFs (text extracted in the browser with pdf.js) and
-text/code files. Attach with the paperclip, drag and drop, or paste. Images go to vision models natively (Claude,
-GPT, Gemini, Grok, OpenRouter, Ollama) and serve as the start frame for video models that take one.
+## Accounts and access
 
-## How it works
+- An access key opens the app (the landing stays public). Wrong keys are slowed down and locked out after five tries.
+- Sign-in with GitHub, Google or an emailed code. Settings → General → Account: name, picture, colour, "about you"
+  (Focus uses it in answers) and the accounts used on this device.
+- Chats and settings are stored in the browser (`localStorage`).
 
-- **Bring your own keys.** Keys are kept in the browser (`localStorage`) and sent with each call to the serverless
-  proxy in `api/`, which calls the provider and streams the answer back as NDJSON. Nothing is stored on the server.
+## Server settings (Vercel environment variables)
 
-### HTTP agents
-
-Focus sends `POST <your URL>` with JSON `{ "task": "...", "system": "...", "model": "...", "history": [...],
-"images": ["data:image/png;base64,…"] }` and an optional `Authorization: Bearer <token>`. Reply with plain text,
-or JSON with any of `output` / `text` / `result`, and optionally `video_url` / `image_url` / `url` — videos and
-images are shown inline. Only public `https://` URLs are allowed.
+| Variable | What it does |
+| --- | --- |
+| `AUTH_SECRET` | Signs sessions and access cookies. Required for the access key and sign-in. |
+| `FOCUS_ACCESS_CODE` | The key that opens the app. |
+| `FOCUS_OLLAMA_KEY` | Ollama Cloud key: the main, fast models. |
+| `FOCUS_OPENROUTER_KEY` | OpenRouter key for free `:free` models and voice transcription. |
+| `FOCUS_GROQ_KEY`, `FOCUS_GEMINI_KEY`, `FOCUS_CEREBRAS_KEY`, `FOCUS_MISTRAL_KEY`, `FOCUS_SAMBANOVA_KEY` | Optional free-tier keys: more messages a day, and Groq/Gemini also transcribe voice. |
+| `FOCUS_POLLINATIONS_KEY` | Optional: more reliable Focus Image. |
+| `FOCUS_TAVILY_KEY` or `FOCUS_BRAVE_KEY` | Optional: better web search. |
+| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | GitHub sign-in. Callback: `https://<site>/api/auth?a=github-callback` |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google sign-in. Callback: `https://<site>/api/auth?a=google-callback` |
+| `RESEND_API_KEY`, `EMAIL_FROM` | Email codes. Without a verified domain, Resend only delivers to its own account's address. |
 
 ## Develop
 
-```bash
+```
 npm install
-npm run dev      # landing + app + the api/ functions on one dev server
-npm run build    # typecheck + production build into dist/
+npm run dev        # http://localhost:5173, the /api routes run in the dev server
+npx tsc --noEmit   # type check
+npm run build
 ```
 
-Set `FOCUS_ALLOW_PRIVATE_URLS=1` to let custom/HTTP agents call `localhost` during development.
+`VITE_ARTIFACT=1 npx vite build --base=./` builds a copy that runs without a server (chats go through Claude, the
+app is behind a key checked in the page).
 
-## Landing
+## Layout
 
-- `index.html`, `src/style.css`, `src/landing.ts` — the hero: the hairline-to-pill reveal (2.1 s, Web
-  Animations). **Let's Focus** plays it in reverse and opens the app. `src/main.ts` routes between the two.
-- `src/sections.ts`, `src/sections.css` — everything below the hero: the moving band of brands that trusted
-  Team Swift (Rapid Bikes in stretched Anton, XTRVISION in the Hurricane signature script, Aeronus in Pixelify
-  Sans, Clorus in Instrument Serif), an intro whose words light up as you scroll, counters, a bento grid of
-  features with live artwork, an animated diagram for each of the eight modes, how it works, the models Focus
-  works with, FAQ and a final call to action.
-- **Liquid Glass** — Apple's translucent material on the navigation layer: the nav turns into a floating glass
-  capsule on scroll, cards, tabs and panels are frosted glass with a specular rim and a highlight that follows
-  the pointer, over soft colour from the hero's sunset. In the app, the sidebar, top bar, message box and menus
-  float as glass over the conversation. Honours *Reduce transparency* and *Reduce motion*.
-- `?rec=1` — recording mode: reveal at 0 s, collapse at 4.9 s, 7 s loop; `window.__recVideo(t)` returns
-  `(t mod duration) + 1/120`.
-- Inter (variable, latin, 400–800) is self-hosted from `public/fonts` (SIL OFL, see `LICENSE-Inter.txt`); the
-  brand fonts come from `@fontsource` packages (SIL OFL).
+- `index.html`, `src/landing.ts`, `src/sections.ts`, `src/*.css` — the landing.
+- `src/app/` — the app: `chat.ts` (chat and composer), `api.ts` (routing and calls), `builder.ts` and
+  `templates/` (things Focus builds), `modes.ts` (Aeronus), `settings.ts`, `account.ts`, `tools.ts`, `voice.ts`.
+- `src/i18n.ts`, `src/i18n-ru.ts` — the Russian translation.
+- `api/` — Vercel functions: `run` (chat), `models`, `job` and `media` (generators), `auth`, `web`, `transcribe`.

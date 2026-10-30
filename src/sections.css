@@ -2420,3 +2420,33 @@
     padding: 6px 6px 6px 18px;
   }
 }
+
+/* the closing card never gets wider than the screen */
+.final-wrap {
+  grid-template-columns: minmax(0, 1fr);
+  box-sizing: border-box;
+}
+
+@media (max-width: 560px) {
+  .final-wrap.final-card {
+    width: auto;
+    max-width: none;
+    margin-inline: 16px;
+  }
+}
+
+.final-wrap > * {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.final-wrap h2 {
+  overflow-wrap: anywhere;
+  hyphens: auto;
+}
+
+.final-wrap .cta-row,
+.final-wrap .final-actions {
+  flex-wrap: wrap;
+  justify-content: center;
+}

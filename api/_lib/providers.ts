@@ -181,13 +181,41 @@ async function runFocus(input: RunInput): Promise<RunResult> {
 export const OLLAMA_URL = "https://ollama.com/v1/chat/completions";
 
 /** The chat models Ollama Cloud offers with the server key. */
-export async function ollamaModels(): Promise<string[]> {
+let ollamaProbe: { at: number; list: { id: string; ms: number }[] } | undefined;
+
+/**
+ * The Ollama Cloud models this server's key can really use, fastest first. Each one gets a one-token test
+ * (the plan may cover only some of them); the result is kept for half an hour.
+ */
+export async function ollamaModels(): Promise<{ id: string; ms: number }[]> {
   const key = process.env.FOCUS_OLLAMA_KEY?.trim();
   if (!key) throw new UserError("Ollama isn't set up on this server (FOCUS_OLLAMA_KEY).", 503);
+  if (ollamaProbe && Date.now() - ollamaProbe.at < 30 * 60_000) return ollamaProbe.list;
   const res = await fetch("https://ollama.com/v1/models", { headers: { authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(10000) });
   if (!res.ok) throw new UserError(`Ollama didn't answer (${res.status}).`, 502);
-  const data = (await res.json()) as { data?: { id: string }[] };
-  return (data.data ?? []).map((m) => m.id).sort();
+  const ids = (((await res.json()) as { data?: { id: string }[] }).data ?? []).map((m) => m.id);
+  const probe = async (id: string, retry = true): Promise<{ id: string; ms: number } | null> => {
+    const t = Date.now();
+    try {
+      const r = await fetch(OLLAMA_URL, {
+        method: "POST",
+        headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
+        body: JSON.stringify({ model: id, max_tokens: 1, messages: [{ role: "user", content: "hi" }] }),
+        signal: AbortSignal.timeout(12000),
+      });
+      // too many at once: wait a moment and ask once more
+      if (r.status === 429 && retry) return (await new Promise((ok) => setTimeout(ok, 1200)), probe(id, false));
+      return r.ok ? { id, ms: Date.now() - t } : null;
+    } catch {
+      return null;
+    }
+  };
+  // four at a time, so the test itself doesn't hit the rate limit
+  const tried: ({ id: string; ms: number } | null)[] = [];
+  for (let i = 0; i < ids.length; i += 4) tried.push(...(await Promise.all(ids.slice(i, i + 4).map((id) => probe(id)))));
+  const list = tried.filter((x): x is { id: string; ms: number } => !!x).sort((a, b) => a.ms - b.ms);
+  ollamaProbe = { at: Date.now(), list };
+  return list;
 }
 
 /** Free-tier providers Focus can use when the owner sets their keys. Each key = more free messages a day. */

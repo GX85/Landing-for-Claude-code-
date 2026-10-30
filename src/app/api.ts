@@ -144,57 +144,6 @@ async function callFree(model: string, system: string, messages: ChatTurn[], sig
 /** Free hosts that said today's quota is used up; their other models are skipped for this visit. */
 const exhausted = new Set<string>();
 
-const GREET_KEY = "focus.greetings";
-
-/**
- * A fresh one-line headline for the empty chat, written by a fast free model.
- * Resolves to null when no model answers in time; the caller keeps its own line then.
- */
-export async function generateGreeting(hub: "focus" | "aeronus"): Promise<string | null> {
-  if (import.meta.env.VITE_ARTIFACT === "1") return null;
-  const ru = getLang() === "ru";
-  let recent: string[] = [];
-  try {
-    recent = JSON.parse(localStorage.getItem(GREET_KEY) ?? "[]") as string[];
-  } catch {
-    // no history yet
-  }
-  const hour = new Date().getHours();
-  const time = hour < 5 ? "deep night" : hour < 12 ? "morning" : hour < 18 ? "afternoon" : "evening";
-  const what = hub === "focus" ? "Focus, a sharp, witty AI assistant" : "Aeronus, a hub where a whole team of AI agents works on one task";
-  const system = `You write the one headline on the empty start screen of ${what}. Write ONE fresh line of 2 to 7 words in ${ru ? "Russian" : "English"} that invites the user to start. Clever, warm, a little cheeky; vary the form (a question, a quip, an invitation, a tiny joke). It is ${time} for the user. No quotes, no hashtags, at most one emoji, nothing generic like "How can I help you?". Reply with the line only.`;
-  const user = `A new one, please.${recent.length ? ` Not like these: ${recent.slice(0, 6).join(" | ")}` : ""}`;
-  for (const [url, model] of [
-    [FREE_URLS.llm7, "mistral-Nemo-Instruct-2407"],
-    [FREE_URLS.pollinations, "openai-fast"],
-  ]) {
-    try {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ model, temperature: 1.05, max_tokens: 40, messages: [{ role: "system", content: system }, { role: "user", content: user }] }),
-        signal: AbortSignal.timeout(6000),
-      });
-      if (!res.ok) continue;
-      const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-      const line = stripThinking(data.choices?.[0]?.message?.content ?? "")
-        .split("\n")
-        .map((l) => l.trim())
-        .find(Boolean)
-        ?.replace(/^["'«“#*\s]+|["'»”*\s]+$/g, "");
-      if (!line || line.length < 3 || line.length > 70) continue;
-      try {
-        localStorage.setItem(GREET_KEY, JSON.stringify([line, ...recent].slice(0, 10)));
-      } catch {
-        // storage full or blocked: only the no-repeat memory is lost
-      }
-      return line;
-    } catch {
-      // try the next free model
-    }
-  }
-  return null;
-}
 
 let userConnections: Connection[] = [];
 /** Lets Focus agents borrow the user's own OpenRouter key for OpenRouter models. */
@@ -257,7 +206,7 @@ async function chainCall(
 ): Promise<CallResult & { used: string }> {
   const own = userConnections.some((c) => c.provider === "openrouter" && c.apiKey);
   let last: unknown;
-  for (const model of models) {
+  for (const model of healthy(models)) {
     if (model.startsWith("openrouter/") && ((!own && serverOpenRouter === false) || Date.now() < orPausedUntil)) continue;
     if (exhausted.has(model.split("/")[0])) continue;
     const attempt = new AbortController();
@@ -276,6 +225,7 @@ async function chainCall(
       return { ...r, used: model };
     } catch (error) {
       if (signal.aborted) throw error;
+      failedAt.set(model, Date.now());
       last = attempt.signal.aborted ? new Error(heard ? "the model stopped mid-answer" : "the model took too long to start") : error;
       const msg = String((error as Error).message);
       // the server has no OpenRouter key: stop asking it for the rest of this visit
@@ -331,13 +281,55 @@ const visionModels = (): string[] => {
 
 /** Turned off for the rest of the visit when the server says it has no Ollama key. */
 let ollamaUp = true;
+/** The Ollama Cloud models the server's key really runs (it tests them), fastest first. Unknown until loaded. */
+let ollamaWorking: string[] | undefined;
+
+/** Asks the server once which Ollama models answer; routing then skips the ones that don't. */
+export async function loadWorkingModels(): Promise<string[]> {
+  if (import.meta.env.VITE_ARTIFACT === "1") return [];
+  try {
+    const res = await fetch("/api/models?ollama=1", { method: "POST", cache: "no-store" });
+    if (!res.ok) return [];
+    ollamaWorking = ((await res.json()) as { models?: string[] }).models ?? [];
+    if (!ollamaWorking.length) ollamaUp = false;
+    return ollamaWorking;
+  } catch {
+    return [];
+  }
+}
+
+const usable = (id: string) => !ollamaWorking || ollamaWorking.includes(id);
+
+/** What kind of message this is, so the model that is best at it goes first. */
+type Task = "code" | "reason" | "creative" | "chat";
+function taskOf(text: string): Task {
+  const t = text.slice(0, 1500);
+  if (/```|\b(function|const|class|def|import|return|SELECT|regex|python|javascript|typescript|java|c\+\+|rust|golang|sql|html|css|api|bug|stack ?trace|exception)\b|код|ошибк[аиу] в|скрипт|программ/i.test(t)) return "code";
+  if (/\d\s*[-+*/^×÷=]\s*\d|реши|посчитай|вычисл|докажи|задач[аиу]|уравнен|вероятност|логик|solve|calculate|compute|prove|equation|probability|puzzle|riddle|загадк/i.test(t)) return "reason";
+  if (/стих|рассказ|сказк|сочин|придумай|историю|слоган|poem|story|lyrics|slogan|tagline|fiction|creative|joke|шутк/i.test(t)) return "creative";
+  return "chat";
+}
+const TASK_MODELS: Record<Task, string[]> = {
+  code: ["gpt-oss:120b", "nemotron-3-ultra", "nemotron-3-super"],
+  reason: ["nemotron-3-ultra", "gpt-oss:120b", "nemotron-3-super"],
+  creative: ["gemma4:31b", "gpt-oss:120b", "nemotron-3-ultra"],
+  chat: [],
+};
+
+/** Models that failed in the last few minutes go to the back of the line. */
+const failedAt = new Map<string, number>();
+const healthy = (models: string[]) => {
+  const now = Date.now();
+  const bad = (m: string) => now - (failedAt.get(m) ?? 0) < 5 * 60_000;
+  return [...models.filter((m) => !bad(m)), ...models.filter(bad)];
+};
 
 const tierModels = (tier: Tier) => {
   const t = TIERS[tier];
   const own = userConnections.some((c) => c.provider === "openrouter" && c.apiKey);
   return [
     // the site's Ollama Cloud key: big models that answer in about a second
-    ...(serverPool > 0 && ollamaUp ? t.ollama.map((m) => `ollama/${m}`) : []),
+    ...(serverPool > 0 && ollamaUp ? t.ollama.filter(usable).map((m) => `ollama/${m}`) : []),
     ...(own || serverOpenRouter !== false ? liveTier(t.or).slice(0, 2).map((m) => `openrouter/${m}`) : []),
     // the server's own free-tier keys (Groq, Gemini…) are faster and roomier than the keyless hosts
     ...(serverPool > 0 ? ["server/pool"] : []),
@@ -406,6 +398,11 @@ async function callTier(spec: string, agent: Agent, conn: Connection, system: st
   if (level.name === "UltraVision") return ultraVision(tier, agent, conn, `${system}\n\n${level.note}`, messages, signal, onText);
 
   let models = tierModels(tier);
+  // the model that is best at this kind of question goes first (Storm keeps its fast ones)
+  if (tier !== "storm" && serverPool > 0 && ollamaUp) {
+    const first = TASK_MODELS[taskOf(ask)].filter(usable).map((m) => `ollama/${m}`);
+    models = [...new Set([...first, ...models])];
+  }
   // a picture is attached: only models that can see go first; the text-only free hosts would ignore it
   const sees = messages.some((m) => m.images?.length);
   if (sees) models = visionModels();
