@@ -12,7 +12,7 @@ import { allSkills, uid, type ModelChoice, type ModelSource, type Skill } from "
 let ollamaModels: string[] | undefined;
 let ollamaSpeed = new Map<string, number>();
 /** The models Focus itself prefers: the smartest that answer fast. */
-const BEST = new Set(["kimi-k3", "deepseek-v4-pro", "glm-5.3", "kimi-k2.7-code", "gpt-oss:120b", "nemotron-3-ultra", "gemma4:31b"]);
+export const BEST = new Set(["kimi-k3", "deepseek-v4-pro", "glm-5.3", "kimi-k2.7-code", "gpt-oss:120b", "nemotron-3-ultra", "gemma4:31b"]);
 let updateNote = "";
 let ollamaLoading = false;
 const OLLAMA_FALLBACK = ["gpt-oss:120b", "gpt-oss:20b"];
@@ -33,7 +33,7 @@ async function updateModels(rerender: () => void): Promise<void> {
   rerender();
 }
 
-function ollamaCatalog(onLoad: () => void): string[] {
+export function ollamaCatalog(onLoad: () => void): string[] {
   if (ollamaModels) return ollamaModels;
   if (import.meta.env.VITE_ARTIFACT === "1") return (ollamaModels = OLLAMA_FALLBACK);
   if (!ollamaLoading) {

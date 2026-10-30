@@ -2076,3 +2076,56 @@ html.dark .set-tabs {
   background: #1b1b1e;
   box-shadow: 0 -14px 0 8px #0b0b0d, 0 0 0 8px #0b0b0d, 0 14px 20px -10px rgba(0, 0, 0, 0.6);
 }
+
+/* the model picker opened from + */
+.popover:has(.model-picker) {
+  width: min(360px, calc(100vw - 24px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.model-picker {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: inherit;
+}
+
+.picker-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.picker-count {
+  color: var(--ink-3, #888);
+  font-size: 12px;
+  padding-right: 8px;
+}
+
+.model-picker input[type="search"] {
+  margin: 4px 4px 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+  color: inherit;
+  font: inherit;
+  font-size: 15px;
+}
+
+.picker-list {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  min-height: 0;
+  flex: 1;
+  max-height: min(56vh, 460px);
+}
+
+.picker-row .menu-text strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

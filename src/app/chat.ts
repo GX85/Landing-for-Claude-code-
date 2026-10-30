@@ -13,7 +13,9 @@ import { typeInto as handWrite, typePlaceholder } from "./typing";
 import { getLang, tr } from "../i18n";
 import { canRecord, startRecording, type Recording } from "./voice";
 import { displayUser, profileOf } from "./account";
-import { allSkills, choiceModel, connectionOf, isReady, KIND_LABEL, missing, newConnection, PERSONA, PROVIDERS, TIER_ORDER, TIERS, uid, type Agent, type Attachment, type Chat, type ChatConfig, type CreateKind, type FocusAgent, type Hub, type Message, type StepRecord, type Tier } from "./store";
+import { BEST, ollamaCatalog } from "./settings";
+import { openRouterCatalog } from "./pages";
+import { allSkills, choiceModel, connectionOf, isReady, KIND_LABEL, missing, newConnection, PERSONA, PROVIDERS, TIER_ORDER, TIERS, uid, type Agent, type Attachment, type Chat, type ChatConfig, type CreateKind, type FocusAgent, type Hub, type Message, type ModelChoice, type StepRecord, type Tier } from "./store";
 
 const SCENE_VIDEO = "https://d2ol7oe51mr4n9.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/175fbbcd-e50a-480c-bab2-ca16d4678322.mp4";
 const SCENE_POSTER = "https://d2ol7oe51mr4n9.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/726b168c-da47-4682-a255-cc3e02f89bae.jpg";
@@ -1298,6 +1300,20 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onH
       "div",
       { class: "menu plus-menu" },
       h("button", { class: "menu-item", type: "button", onclick: () => (closePopover(), fileInput.click()) }, icon("clip", 18), h("span", { class: "menu-text" }, h("strong", {}, "Attach files"), h("small", {}, "Photos, video, PDFs and text files"))),
+      hubOf(config) === "focus"
+        ? h(
+            "button",
+            { class: "menu-item", type: "button", "data-popover": "plus", onclick: (e: Event) => (e.stopPropagation(), openPopover(modelChip, modelPicker())) },
+            icon("settings", 18),
+            h(
+              "span",
+              { class: "menu-text" },
+              h("strong", {}, "Choose a model"),
+              h("small", {}, ctx.state.settings.focus.source === "auto" || !ctx.state.settings.focus.model ? "Auto · 470+ models to pick from" : ctx.state.settings.focus.model.replace(/:free$/, "")),
+            ),
+            icon("chevron", 14),
+          )
+        : null,
       hubOf(config) === "focus" ? h("div", { class: "menu-title" }, "Create") : null,
       ...CREATE.filter(() => hubOf(config) === "focus").map((c) =>
         h(
@@ -1327,9 +1343,11 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onH
     const fa = hub === "focus" ? focusAgentOf(ctx, config) : undefined;
     if (hub === "focus") {
       const lvl = config.think ?? 0;
+      const pc = ctx.state.settings.focus;
+      const picked = pc.source !== "auto" && pc.model ? pc.model : "";
       modelChip.replaceChildren(
         fa ? agentMascot(fa.color, 16) : focusMark(15),
-        h("span", { class: `model-chip-name${fa ? "" : ` tier-${config.tier}`}` }, fa ? fa.name || "Agent" : TIERS[config.tier].name),
+        h("span", { class: `model-chip-name${fa || picked ? "" : ` tier-${config.tier}`}` }, fa ? fa.name || "Agent" : picked ? picked.split("/").pop()!.replace(/:free$/, "") : TIERS[config.tier].name),
         ...(!fa && lvl ? [h("span", { class: "model-chip-sub" }, THINK[lvl].short ?? THINK[lvl].name)] : []),
         icon("chevron", 13),
       );
@@ -1352,7 +1370,13 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onH
     if (hub === "focus") {
       // the agent list only shows up once the user has built an agent
       if (ctx.state.focusAgents.length) sheet.append(...agentMenu().childNodes);
-      if (!fa) sheet.append(h("div", { class: "menu-title" }, "Model"), tierSeg, ...thinkMenu().childNodes);
+      if (!fa) {
+        sheet.append(
+          h("div", { class: "menu-title" }, "Model"),
+          tierSeg,
+          ...thinkMenu().childNodes,
+        );
+      }
     } else {
       sheet.append(
         ...modeMenu().childNodes,
@@ -1369,6 +1393,48 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onH
   };
   modelChip.addEventListener("click", () => openPopover(modelChip, modelSheet()));
 
+  // every model Focus can talk to: the server's fast ones, free OpenRouter models, and the rest with your own key
+  const modelPicker = (): HTMLElement => {
+    const pick = ctx.state.settings.focus;
+    const search = h("input", { type: "search", placeholder: "Search models…", "aria-label": "Search models" });
+    const list = h("div", { class: "picker-list", role: "listbox" });
+    const count = h("small", { class: "picker-count" });
+    const choose = (source: ModelChoice["source"], model: string) => {
+      ctx.state.settings.focus = { source, model };
+      ctx.persist();
+      closePopover();
+      renderBar();
+    };
+    const row = (source: ModelChoice["source"], model: string, name: string, tag: string, on: boolean) =>
+      h(
+        "button",
+        { type: "button", role: "option", "aria-selected": String(on), class: `menu-item picker-row${on ? " selected" : ""}`, onclick: () => choose(source, model) },
+        h("span", { class: "menu-text" }, h("strong", {}, name), h("small", {}, tag)),
+        on ? icon("check", 16) : null,
+      );
+    const paint = () => {
+      const q = search.value.trim().toLowerCase();
+      const hit = (s: string) => !q || s.toLowerCase().includes(q);
+      const ollama = ollamaCatalog(paint);
+      const or = openRouterCatalog(paint);
+      const free = or.filter((m) => m.free);
+      const paid = or.filter((m) => !m.free);
+      const groups: [string, HTMLElement[]][] = [
+        ["", hit("auto focus") ? [row("auto", "", "Auto", "Focus picks the best model for each message", pick.source === "auto" || !pick.model)] : []],
+        ["Fast · on Focus's server", ollama.filter(hit).map((id) => row("ollama", id, id, BEST.has(id) ? "★ best · free" : "free", pick.source === "ollama" && pick.model === id))],
+        ["Free on OpenRouter", free.filter((m) => hit(m.name) || hit(m.id)).map((m) => { const id = m.id.replace(/^openrouter\//, ""); return row("openrouter", id, m.name, "free", pick.source === "openrouter" && pick.model === id); })],
+        ["With your OpenRouter key", paid.filter((m) => hit(m.name) || hit(m.id)).slice(0, 300).map((m) => { const id = m.id.replace(/^openrouter\//, ""); return row("openrouter", id, m.name, "needs your key in Connections", pick.source === "openrouter" && pick.model === id); })],
+      ];
+      const total = 1 + ollama.length + or.length;
+      count.textContent = or.length ? `${total} models` : "Loading models…";
+      list.replaceChildren(...groups.filter(([, rows]) => rows.length).flatMap(([title, rows]) => [...(title ? [h("div", { class: "menu-title" }, title)] : []), ...rows]));
+    };
+    search.addEventListener("input", paint);
+    paint();
+    requestAnimationFrame(() => search.focus({ preventScroll: true }));
+    return h("div", { class: "menu model-picker" }, h("div", { class: "picker-head" }, h("div", { class: "menu-title" }, "Choose a model"), count), search, list);
+  };
+
   const renderBar = () => {
     const hub = hubOf(config);
     const fa = hub === "focus" ? focusAgentOf(ctx, config) : undefined;
@@ -1382,7 +1448,7 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onH
     tierSeg.dataset.tier = config.tier;
     for (const b of hubSwitch.querySelectorAll<HTMLElement>(".hub-opt")) b.setAttribute("aria-checked", String(b.dataset.hub === hub));
     for (const b of tierSeg.querySelectorAll<HTMLElement>(".tier-opt")) b.setAttribute("aria-checked", String(b.dataset.tier === config.tier));
-    void typePlaceholder(input, create ? CREATE.find((c) => c.kind === create)!.ask : hub === "focus" ? `Ask ${fa ? fa.name || "your agent" : TIERS[config.tier].name}…` : "Message your team…");
+    void typePlaceholder(input, create ? CREATE.find((c) => c.kind === create)!.ask : hub === "focus" ? `Ask ${fa ? fa.name || "your agent" : ctx.state.settings.focus.source !== "auto" && ctx.state.settings.focus.model ? ctx.state.settings.focus.model.split("/").pop()!.replace(/:free$/, "") : TIERS[config.tier].name}…` : "Message your team…");
     opts.replaceChildren(
       ...(hub === "focus"
         ? fa
