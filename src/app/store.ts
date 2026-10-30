@@ -142,11 +142,12 @@ How you talk:
  * Focus tiers. Each tries its OpenRouter models first (through Focus's key, or the user's own),
  * then falls back to keyless free models, so every tier works with no setup at all.
  */
-export const TIERS: Record<Tier, { name: string; tag: string; blurb: string; or: string[]; free: string[]; role: string }> = {
+export const TIERS: Record<Tier, { name: string; tag: string; blurb: string; /** Ollama Cloud models run with the site's key: the fastest and smartest Focus has, tried first. */ ollama: string[]; or: string[]; free: string[]; role: string }> = {
   storm: {
     name: "Storm",
     tag: "Lightning fast",
     blurb: "The lightest, fastest models. Short answers in a flash.",
+    ollama: ["gemma4:31b", "gpt-oss:120b", "nemotron-3-super"],
     or: ["nvidia/nemotron-3.5-lightning:free", "liquid/lfm-2.5-2.6b:free", "google/gemma-4-26b-a4b-it:free"],
     free: ["llm7/mistral-Nemo-Instruct-2407", "pollinations/openai-fast"],
     role: "Tier: Storm, the fastest Focus. Keep answers short and punchy: a few sentences or a tight list, unless the user asks for depth.",
@@ -155,6 +156,7 @@ export const TIERS: Record<Tier, { name: string; tag: string; blurb: string; or:
     name: "GEN",
     tag: "Balanced",
     blurb: "Mid-size models: quick enough for chat, sharp enough for real work.",
+    ollama: ["gpt-oss:120b", "nemotron-3-super", "gemma4:31b"],
     or: ["google/gemma-4-31b-it:free", "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free", "thinkingmachines/inkling-small:free"],
     free: ["llm7/nemotron-3-nano:30b", "llm7/minimax-m2.7"],
     role: "Tier: GEN, the everyday Focus. Balance depth and length to the question.",
@@ -163,6 +165,7 @@ export const TIERS: Record<Tier, { name: string; tag: string; blurb: string; or:
     name: "Clorus",
     tag: "Smartest · builds things",
     blurb: "The most capable models. Makes presentations, games, websites and apps you can preview right in the chat.",
+    ollama: ["nemotron-3-ultra", "gpt-oss:120b", "nemotron-3-super"],
     or: ["nvidia/nemotron-3-ultra-550b-a55b:free", "thinkingmachines/inkling:free", "poolside/laguna-s-2.1:free"],
     free: ["llm7/minimax-m2.7", "llm7/gpt-oss:20b"],
     role:

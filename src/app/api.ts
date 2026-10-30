@@ -280,6 +280,7 @@ async function chainCall(
       const msg = String((error as Error).message);
       // the server has no OpenRouter key: stop asking it for the rest of this visit
       if (model.startsWith("openrouter/") && !own && /FOCUS_OPENROUTER_KEY|needs Focus/.test(msg)) serverOpenRouter = false;
+      if (model.startsWith("ollama/") && /FOCUS_OLLAMA_KEY|isn't set up/.test(msg)) ollamaUp = false;
       // OpenRouter's free models are rate limited per key: give them a few minutes off
       if (model.startsWith("openrouter/") && /429|rate.?limit|quota|credits|busy/i.test(msg)) orPausedUntil = Date.now() + 5 * 60_000;
     } finally {
@@ -328,10 +329,15 @@ const visionModels = (): string[] => {
   ];
 };
 
+/** Turned off for the rest of the visit when the server says it has no Ollama key. */
+let ollamaUp = true;
+
 const tierModels = (tier: Tier) => {
   const t = TIERS[tier];
   const own = userConnections.some((c) => c.provider === "openrouter" && c.apiKey);
   return [
+    // the site's Ollama Cloud key: big models that answer in about a second
+    ...(serverPool > 0 && ollamaUp ? t.ollama.map((m) => `ollama/${m}`) : []),
     ...(own || serverOpenRouter !== false ? liveTier(t.or).slice(0, 2).map((m) => `openrouter/${m}`) : []),
     // the server's own free-tier keys (Groq, Gemini…) are faster and roomier than the keyless hosts
     ...(serverPool > 0 ? ["server/pool"] : []),

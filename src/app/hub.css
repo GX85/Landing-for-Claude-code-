@@ -2064,3 +2064,15 @@ html.dark .app-root .md code {
 .model-sheet .hub-opt {
   padding: 0 4px;
 }
+
+/* the settings tabs stay solid while the page scrolls under them */
+.set-tabs {
+  top: 0;
+  background: #ecebe7;
+  box-shadow: 0 -14px 0 8px #fafaf9, 0 0 0 8px #fafaf9, 0 14px 20px -10px rgba(0, 0, 0, 0.25);
+}
+
+html.dark .set-tabs {
+  background: #1b1b1e;
+  box-shadow: 0 -14px 0 8px #0b0b0d, 0 0 0 8px #0b0b0d, 0 14px 20px -10px rgba(0, 0, 0, 0.6);
+}

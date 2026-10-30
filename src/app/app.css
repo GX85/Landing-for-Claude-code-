@@ -2257,3 +2257,73 @@ html.dark .app-root .send-btn {
   background: #e5484d;
   color: #fff;
 }
+
+/* every text field has soft corners */
+.app-root input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.app-root select,
+.app-root .page textarea {
+  border-radius: 12px;
+}
+
+.set-body input {
+  width: 100%;
+  min-width: 0;
+  padding: 11px 14px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+  color: inherit;
+  font: inherit;
+  font-size: 15px;
+}
+
+.set-body {
+  display: grid;
+  gap: 8px;
+  padding: 4px 0 10px;
+}
+
+/* the sidebar footer: a rounded card that stays inside the panel */
+.app-root .side-foot {
+  margin: 6px 0 10px;
+  padding: 6px;
+  border-top: 0;
+  border-radius: 16px;
+}
+
+.app-root .side-user {
+  margin: 4px 0 0;
+  padding: 6px 8px;
+  border-radius: 12px;
+  min-width: 0;
+}
+
+.app-root .side-user-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* the page behind the app has the app's own colour, so nothing shows through around the keyboard */
+html.dark body {
+  background: #0b0b0d;
+}
+
+@media (max-width: 860px) {
+  /* the drawer: solid, the visible height of the screen, rounded on every corner */
+  .app-root .side {
+    height: calc(100dvh - 16px);
+    max-height: calc(var(--vvh, 100dvh) - 16px);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  html.dark .app-root .side {
+    background: #141416;
+  }
+
+  html:not(.dark) .app-root .side {
+    background: #f6f5f3;
+  }
+}

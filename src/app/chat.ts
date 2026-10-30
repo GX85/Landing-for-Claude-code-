@@ -3,7 +3,7 @@ import type { ChatTurn } from "./api";
 import { h, icon, pageHead, seconds } from "./dom";
 import { renderMarkdown, renderMarkdownStreaming } from "./markdown";
 import { ACCEPT, dataUrlOf, readAttachments } from "./attachments";
-import { generateGreeting, resolveMedia, setConnections, type ImagePart } from "./api";
+import { resolveMedia, setConnections, type ImagePart } from "./api";
 import { modeInfo, MODES, startRun } from "./modes";
 import { click, setSound } from "./sound";
 import { agentAvatar, applyHub, focusMark } from "./brand";
@@ -105,19 +105,11 @@ export function renderChat(main: HTMLElement, ctx: Ctx, chat: Chat | undefined):
   if (!chat || !chat.messages.length) {
     const title = h("h1", { class: "hello-title" });
     const sugg = h("div", { class: "suggestions" });
-    let greeting = 0;
     const paint = (animate: boolean) => {
       const hub = hubOf(config);
+      // hand-written lines: the ones free models invented were often nonsense
       const pool = GREETINGS[hub][getLang()];
-      title.textContent = pool[Math.floor(Math.random() * pool.length)];
-      title.classList.add("waiting");
-      // a fresh line from the model each time a new chat opens; the local one stays if it's slow
-      const ticket = ++greeting;
-      void generateGreeting(hub).then((line) => {
-        title.classList.remove("waiting");
-        if (!line || ticket !== greeting || !title.isConnected) return;
-        typeInto(title, line);
-      });
+      typeInto(title, pool[Math.floor(Math.random() * pool.length)]);
       sugg.replaceChildren(...suggestionsFor(ctx, config, main, chat));
       for (const el of [title, sugg]) {
         el.classList.remove("swap");
@@ -155,8 +147,8 @@ const hubOf = (c: ChatConfig): Hub => c.hub ?? "aeronus";
 /** Shown at once while the model writes a fresh headline (and kept if it doesn't). */
 const GREETINGS: Record<Hub, Record<"en" | "ru", string[]>> = {
   focus: {
-    en: ["What shall we focus on?", "Go on, surprise me.", "Brain's warmed up. You?", "Big idea or small fix?", "Let's make something good."],
-    ru: ["Ну что, помозгуем?", "Чем удивишь сегодня?", "Мозг разогрет. Начнём?", "Большая идея или мелкий баг?", "Давай сделаем что-то классное."],
+    en: ["What shall we focus on?", "Go on, surprise me.", "Brain's warmed up. You?", "Big idea or small fix?", "Let's make something good.", "What are we building today?", "Ask me anything.", "Ready when you are."],
+    ru: ["Ну что, помозгуем?", "Чем удивишь сегодня?", "Мозг разогрет. Начнём?", "Большая идея или мелкий баг?", "Давай сделаем что-то классное.", "Что строим сегодня?", "Спрашивай что угодно.", "Я готов, а ты?"],
   },
   aeronus: {
     en: ["Assemble the team.", "The agents are listening.", "Who's on the case today?", "One task, many minds."],
