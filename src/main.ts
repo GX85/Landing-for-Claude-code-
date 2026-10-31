@@ -89,7 +89,7 @@ async function apply(route: Route): Promise<void> {
 
 /** Built as a Claude Artifact: no server, no path routing. */
 const ARTIFACT = import.meta.env.VITE_ARTIFACT === "1";
-const HASH_ROUTES: Record<string, string> = { app: "/app", agents: "/app/agents", connections: "/app/connections", modes: "/app/modes" };
+const HASH_ROUTES: Record<string, string> = { app: "/app", agents: "/app/agents", connections: "/app/connections", modes: "/app/modes", settings: "/app/settings", "my-agents": "/app/my-agents", team: "/app/team" };
 let artifactPath = HASH_ROUTES[location.hash.slice(1)] ?? "/";
 const currentPath = () => (ARTIFACT ? artifactPath : location.pathname);
 

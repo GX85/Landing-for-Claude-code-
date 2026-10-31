@@ -310,5 +310,6 @@ export function renderSettings(main: HTMLElement, ctx: Ctx): void {
   );
   tabs.classList.add("set-tabs");
   paint();
-  main.replaceChildren(pageHead("Settings"), h("div", { class: "page" }, h("div", { class: "page-inner" }, tabs, body)));
+  const version = h("p", { class: "field-hint set-version" }, `Focus · build ${__BUILD__}`);
+  main.replaceChildren(pageHead("Settings"), h("div", { class: "page" }, h("div", { class: "page-inner" }, tabs, body, version)));
 }

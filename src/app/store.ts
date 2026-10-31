@@ -352,7 +352,7 @@ export interface State {
   version?: number;
 }
 
-export type ModelSource = "auto" | "openrouter" | "ollama";
+export type ModelSource = "auto" | "openrouter" | "ollama" | "claude";
 export interface ModelChoice {
   source: ModelSource;
   /** The model's id on that service, without the service prefix. */

@@ -149,7 +149,7 @@ let userConnections: Connection[] = [];
 /** Lets Focus agents borrow the user's own OpenRouter key for OpenRouter models. */
 export const setConnections = (list: Connection[]) => (userConnections = list);
 
-type Sample = ((input: string | { role: string; content: string }[], opts?: { onText?: (e: { text: string }) => void; signal?: AbortSignal; cache?: boolean }) => Promise<{ text: string }>) | null;
+type Sample = ((input: string | { role: string; content: string }[], opts?: { onText?: (e: { text: string }) => void; signal?: AbortSignal; cache?: boolean; modelTier?: string; model?: string }) => Promise<{ text: string; modelApplied?: string }>) | null;
 let samplePromise: Promise<Sample> | undefined;
 
 /** Inside a Claude Artifact there is no Focus server, so every chat agent answers through Claude. */
@@ -163,8 +163,13 @@ async function callInArtifact(agent: Agent, system: string, messages: ChatTurn[]
     content: `${i === 0 ? `${system}\n\n---\n\n` : ""}${m.content}${m.images?.length ? "\n\n[An image was attached.]" : ""}`,
   }));
   try {
-    const r = await sample(turns, { onText: (e) => onText(e.text), signal, cache: false });
-    return { text: r.text.trim(), model: `Claude · as ${agent.name}` };
+    // the model the user picked from + (Claude Haiku, Sonnet, Opus, Fable), or the tier's own speed
+    const picked = agent.prefer?.startsWith("claude/") ? agent.prefer.slice("claude/".length) : "";
+    const tier = /^tier:(\w+)/.exec(agent.model)?.[1];
+    const modelTier = tier === "storm" ? "quick" : tier === "clorus" ? "complex" : "default";
+    const r = await sample(turns, { onText: (e) => onText(e.text), signal, cache: false, modelTier, ...(picked ? { model: picked } : {}) });
+    const used = (r as { modelApplied?: string }).modelApplied || picked;
+    return { text: r.text.trim(), model: used ? `Claude · ${used}` : `Claude · as ${agent.name}` };
   } catch (error) {
     const e = error as { code?: string; message?: string };
     throw new Error(e.code === "not_granted" ? "Allow this page to ask Claude to chat here." : e.code === "rate_limited" ? "Claude is rate limited right now. Try again in a minute." : e.message || "Claude couldn't answer.");
@@ -244,7 +249,7 @@ async function chainCall(
 }
 
 /** The model an agent asked for first, as "openrouter/…" or "ollama/…"; a bare id means OpenRouter. */
-const preferred = (agent: Agent): string | undefined => (agent.prefer ? (/^(openrouter|ollama)\//.test(agent.prefer) ? agent.prefer : `openrouter/${agent.prefer}`) : undefined);
+const preferred = (agent: Agent): string | undefined => (agent.prefer && !agent.prefer.startsWith("claude/") ? (/^(openrouter|ollama)\//.test(agent.prefer) ? agent.prefer : `openrouter/${agent.prefer}`) : undefined);
 
 /** OpenRouter's free models as they are right now, newest first. Models that have been retired are dropped from the tiers and new ones fill in. */
 let liveFree: string[] | undefined;

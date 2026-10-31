@@ -1309,7 +1309,7 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onH
               "span",
               { class: "menu-text" },
               h("strong", {}, "Choose a model"),
-              h("small", {}, ctx.state.settings.focus.source === "auto" || !ctx.state.settings.focus.model ? "Auto · 470+ models to pick from" : ctx.state.settings.focus.model.replace(/:free$/, "")),
+              h("small", {}, ctx.state.settings.focus.source === "auto" || !ctx.state.settings.focus.model ? (import.meta.env.VITE_ARTIFACT === "1" ? "Auto · Claude Haiku, Sonnet, Opus or Fable" : "Auto · 470+ models to pick from") : ctx.state.settings.focus.model.replace(/:free$/, "")),
             ),
             icon("chevron", 14),
           )
@@ -1415,6 +1415,23 @@ function buildComposer(ctx: Ctx, chat: Chat | undefined, config: ChatConfig, onH
     const paint = () => {
       const q = search.value.trim().toLowerCase();
       const hit = (s: string) => !q || s.toLowerCase().includes(q);
+      if (import.meta.env.VITE_ARTIFACT === "1") {
+        // in the Artifact every answer comes from Claude: pick which one
+        const claude: [string, string, string][] = [
+          ["claude-haiku-5-5", "Claude Haiku 5.5", "fastest"],
+          ["claude-sonnet-5-5", "Claude Sonnet 5.5", "fast and smart"],
+          ["claude-opus-5-5", "Claude Opus 5.5", "smartest"],
+          ["claude-fable-5-1", "Claude Fable 5.1", "most capable"],
+        ];
+        count.textContent = `${claude.length + 1} models`;
+        list.replaceChildren(
+          row("auto", "", "Auto", "Storm, GEN and Clorus pick the speed", pick.source === "auto" || !pick.model),
+          h("div", { class: "menu-title" }, "Claude"),
+          ...claude.filter(([id, name]) => hit(id) || hit(name)).map(([id, name, tag]) => row("claude", id, name, tag, pick.source === "claude" && pick.model === id)),
+          h("p", { class: "field-hint picker-note" }, "All 470+ models are on the website, focus-agents.vercel.app."),
+        );
+        return;
+      }
       const ollama = ollamaCatalog(paint);
       const or = openRouterCatalog(paint);
       const free = or.filter((m) => m.free);

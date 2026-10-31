@@ -41,4 +41,6 @@ function devApi(): Plugin {
 
 export default defineConfig({
   plugins: [devApi()],
+  // shown in Settings, so it's easy to tell which build is open
+  define: { __BUILD__: JSON.stringify(new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC") },
 });
